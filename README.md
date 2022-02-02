@@ -44,7 +44,7 @@ Have existing value __max__, the most recent known update of the deck as entered
 
 Call Scryfall for the current list of sets as __allSets__.
 
-`function recency(date) { return date >= max; };`
+```function recency(date) { return date >= max; };`
 `let newSets = allSets.filter(recency);`
 `let updates = [];`
 `for (i = 0; i < newSets.length; i++) {`
@@ -70,7 +70,7 @@ Call Scryfall for the current list of sets as __allSets__.
 ` let penultimate = updates.slice(0, (updates.length - 2));`
 ` let update = "Since this deck was last updated, the following sets have been released: " penultimate.join("; ") + "and " + updates[(updates.length - 1)] + ".";`
 ` return update;`
-`}`
+`}```
 
 Append __update__ to the results.
 
