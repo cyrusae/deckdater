@@ -96,3 +96,9 @@ Append __update__ to the results.
 - *Carpentry* (and related/resulting names; yes, that includes *jesus*) is the thing that makes tables.
 - Within `for (i = 0; i < newSets.length; i++)`, __jefferson__ exists to ferry __what__ the user may have missed to __updates__. In other words, [it is a Hamilton joke](https://genius.com/Daveed-diggs-leslie-odom-jr-okieriete-onaodowan-and-original-broadway-cast-of-hamilton-whatd-i-miss-lyrics), my dudes and non-dudes.
 - __strangers__ are just __friends__ who haven't shared their ~~secrets~~ set codes yet.
+
+#### on homosexuality
+
+This one's for Martin. 
+
+If you're not Martin, you can still look at it, though. You just won't be Martin, which you would already have been doing anyway.
