@@ -11,6 +11,8 @@ Uses Scryfall data.
 
 *Frontend visible to the user.*
 
+> This is about making a front page in HTML for people to interact with. It needs to be written once and doesn't change.
+
 - Instructions (e.g. "I do not need your basic lands")
 - `textarea` for inputting decklist
 - Button to trigger dating process
@@ -18,21 +20,29 @@ Uses Scryfall data.
 - Empty div for __update__ output (once implemented)
 - Empty div for "go again" button (once implemented)
 
+> `textarea` is a big text entry field. `div`s are the default form of empty/fill-able box for a webpage to assemble itself out of.
+
 ## carpentry
 
 *The part of the backend involving setup that makes tables.*
 
 1. Fetch latest version of Scryfall's unique card art bulk-data json object.
+> json is a format for storing large amounts of data, in this case data that looks a lot like the contents of a spreadsheet. "bulk-data" is the name Scryfall uses for their various "download our entire database" options. The one I'm using is cards with unique art only, which cuts out some reprints, but not all.
 2. Unpack Scryfall json into a table in database for manipulation (henceforth __bulk__)
-3. `SELECT name, oracle_id, released_at, set INTO cards FROM bulk WHERE reprint = 'false' AND multiverse_ids IS NOT NULL`.
+> "make that data I just said looks a lot like the contents of a spreadsheet *actually* look/act like we're used to thinking of spreadsheets"
+3. `SELECT name, id, released_at, set INTO cards FROM bulk WHERE reprint = 'false' AND multiverse_ids IS NOT NULL`.
+> This is SQL. The variable names are all [based on how Scryfall handles it](https://scryfall.com/docs/api/cards). This command looks at the __bulk__ table and makes a new, smaller table of only cards that aren't reprints and are on Gatherer, including only their names, release dates, sets, and ID information for Scryfall itself. (I'm not currently using the ID for anything, but it seemed like it might come in handy.)
 
 Here, make a lighter-weight table of only salient information (from our perspective) about cards that aren't reprints and that exist in Gatherer (which prunes out tokens and the like); its name is __cards__. This should be all we need going forward.
 
 ***To do:*** Determine when to trigger `DROP TABLE bulk`.
+> This would delete __bulk__ (the "literally everything Scryfall sent me" table) when relevant.
 
 ***To do:*** Automate updates to __cards__. Maybe check the number of known sets on Scryfall once a week, and rehydrate the *carpentry* when it changes?
+> Hydration is spritzing a thing with new/updated data to liven it up a bit. (Do I know if the metaphor feels that literal for other people? No. Is it how I remember? Yes.) Although in our case, given deckdater overwrites/replaces its own data any time it updates __cards__, it's more of a tsunami kind of situation.
 
 ***To do:*** Streamline rehydration in general. In case of emergency the correct __cards__ table is the one with the greatest `MAX(released_at)` and the most entries; determine what tests that best enables.
+> I'm worried about something going wrong during this table creation process, and my best bet for how to find it right now is "tell deckdater to trust the table with the newest cards in it". Dates in this format are larger quantities when they're more recent, because it's defining a 'date' by counting up from a fixed time in the past.
 
 ## dating
 

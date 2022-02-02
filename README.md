@@ -21,7 +21,7 @@ Uses Scryfall data.
 
 1. Fetch latest version of Scryfall's unique card art bulk-data json object.
 2. Unpack Scryfall json into a table in database for manipulation (henceforth __bulk__)
-3. `SELECT name, oracle_id, released_at, set INTO cards FROM bulk WHERE reprint = 'false' AND multiverse_ids IS NOT NULL`.
+3. `SELECT name, id, released_at, set INTO cards FROM bulk WHERE reprint = 'false' AND multiverse_ids IS NOT NULL`.
 
 Here, make a lighter-weight table of only salient information (from our perspective) about cards that aren't reprints and that exist in Gatherer (which prunes out tokens and the like); its name is __cards__. This should be all we need going forward.
 
