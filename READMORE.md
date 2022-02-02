@@ -1,8 +1,11 @@
+
 # project tag deckdater
 
 Tool for determining when a MtG decklist was last up to date, so you know which sets have released since then and might have cards you want for it.
 
 Uses Scryfall data.
+
+> This page is a copy of the README *(file where I'm supposed to try to explain myself)* where I try to add explanations for a lay audience as I go. It is, even more than the normal README and this entire project, a work in progress.
 
 ## interface
 
