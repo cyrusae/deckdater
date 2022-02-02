@@ -87,4 +87,4 @@ Append __update__ to the results.
 - Check the released_at of our new __friends__. 
 - If any is `>` existing __max__, STOP HERE and do a round of *carpentry* updates: __cards__ is missing a set. (Restart with the same __deck__ after this. May want a loading message to let the user know.)
 - If all are `<=` existing __max__, assume Scryfall's more sophisticated fuzzy search caught user typos we couldn't. 
-- Add __friends__ whose released_at date also = __max__ to the final output.
+- Add __friends__ whose `released_at` date also `=` __max__ to the final output.
