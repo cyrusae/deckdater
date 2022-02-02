@@ -79,12 +79,12 @@ Append __update__ to the results.
 
 #### In case of unfamiliar cards 
 
-**Needs:** A way to determine which card names in __deck__ that appear to be otherwise legit *didn't* find a match in __cards__.
+***Needs:*** A way to determine which card names in __deck__ that appear to be otherwise legit *didn't* find a match in __cards__.
 
 - Assume for the time being that we have that information, as __strangers__.
 - Search Scryfall API for those cards by name. (Remember: 10 searches per second.) 
 - Results that are real cards (found on Scryfall, not a reprint, not a token, etc.) and weren't in __cards__ are now __friends__. (Because we've met them.)
 - Check the released_at of our new __friends__. 
-- If any is > existing __max__, STOP HERE and do a round of *carpentry* updates: __cards__ is missing a set. (Restart with the same __deck__ after this. May want a loading message to let the user know.)
-- If all are <= existing __max__, Scryfall's more sophisticated fuzzy search caught user typos we couldn't. 
+- If any is `>` existing __max__, STOP HERE and do a round of *carpentry* updates: __cards__ is missing a set. (Restart with the same __deck__ after this. May want a loading message to let the user know.)
+- If all are `<=` existing __max__, assume Scryfall's more sophisticated fuzzy search caught user typos we couldn't. 
 - Add __friends__ whose released_at date also = __max__ to the final output.
