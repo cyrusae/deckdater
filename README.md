@@ -45,9 +45,9 @@ Here, make a lighter-weight table of only salient information (from our perspect
 4. Use __max__ and __deck__ in `SELECT name, released_at, set FROM cards WHERE date = ? HAVING name = ?`.
 5. Bring the result of (4) in as __latest__.
 6. Define const __lastSet__ as `latest.latest[0].set` and const __lastDay__ as `latest.latest[0].released_at`.
-7. Break the various `name`s out of __latest__ as their own string __news__.
+7. Break the various `name`s out of __latest__ as their own array __news__.
 8. Produce __verdict__: 
-- `if (news.length === 1) { let additions = "This deck's newest card is " + news[0]} else if (news.length === 2) { let verdict = "The newest cards in this deck are " + news[0] + " and " + news[1]} else { let additions = "The newest cards in this deck are " + news.join(", ")}` (for grammar), then
+- `if (news.length === 1) { let additions = "This deck's newest card is " + news[0]} else if (news.length === 2) { let additions = "The newest cards in this deck are " + news[0] + " and " + news[1]} else { let additions = "The newest cards in this deck are " + news.join(", ")}` (for grammar), then
 - `let verdict = additions + ", first printed in " + lastSet + ". Your deck is up to date as of " + lastDay + "."`
 9. Put __verdict__ back into the document in its designated results div.
 

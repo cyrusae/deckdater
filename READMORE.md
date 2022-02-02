@@ -1,3 +1,4 @@
+> ***To do:*** Add explanatory notes to the future features/API calls etc. section, currently they stop before there. *(2022.02.02.)*
 
 # project tag deckdater
 
@@ -48,21 +49,33 @@ Here, make a lighter-weight table of only salient information (from our perspect
 
 *Process involved in deckdater deckdating a deck.*
 
-1. Sanitize and parse user input:
+> This process only happens when a user triggers it by entering text into the front page and then hitting the button. It's almost all JavaScript (there's detours into SQL to talk to __cards__ effectively).
+
+1. Get, sanitize and parse user input:
 - Remove basic lands, if there are any
 - Remove duplicate entries
 - Remove chaff like '1x [cardname]' and recognizably null or bad-faith input
 - Add special characters for `LIKE` searching 
+> Sanitizing data gets rid of potentially malicious code and at least some non-useful content. In this case, I want to find the individual card names someone entered, ignore things that would throw off the results (like if they ignored me first and put in basic lands), and filter out anything that would never be a card, got submitted by accident, or is trying to get into __cards__ and screw me over somehow. I'd also like to modify the card names, once I've found them, to make them easier to search from the computer's perspective - since people don't always enter a card's "full" name and punctuation is tricky - but we'll see how that turns out in practice.
 2. Produce a string of comma-separated user-entered search terms, __deck__
+> The end result of (1) is a list of cards separated with commas, because that's what I can send back to __cards__ to look into.
 3. Define const __max__ by doing `SELECT MAX(released_at) FROM cards WHERE name LIKE` with __deck__.
+> "Go to __cards__, find each card named something that the user entered as part of their decklist, figure out which of those cards is the most recent, and call the release date of that most recent card __max__." 
 4. Use __max__ and __deck__ in `SELECT name, released_at, set FROM cards WHERE date = ? HAVING name = ?`.
+> The question marks are a product of moving between SQL and JavaScript. This asks __cards__ for the name, release date, and set of every card mentioned in the user's decklist that was released on the day the most recent card(s) they entered were released.
 5. Bring the result of (4) in as __latest__.
+> Stuff the answer to that query into a format that JavaScript can manipulate.
 6. Define const __lastSet__ as `latest.latest[0].set` and const __lastDay__ as `latest.latest[0].released_at`.
-7. Break the various `name`s out of __latest__ as their own string __news__.
+> [0] in this context will be the *first* item in a list(/string/array). This wants to record what the set and release date named in the answer to "what's the set and release date of the most recent card(s)" actually *are*, in what will be a human-readable format.
+7. Break the various `name`s out of __latest__ as their own array __news__.
+> Make an array (a list of items made of random-from-the-computer's-perspective contents) listing the names of the recent cards we identified.
 8. Produce __verdict__: 
-- `if (news.length === 1) { let additions = "This deck's newest card is " + news[0]} else if (news.length === 2) { let verdict = "The newest cards in this deck are " + news[0] + " and " + news[1]} else { let additions = "The newest cards in this deck are " + news.join(", ")}` (for grammar), then
+- `if (news.length === 1) { let additions = "This deck's newest card is " + news[0]} else if (news.length === 2) { let additions = "The newest cards in this deck are " + news[0] + " and " + news[1]} else { let additions = "The newest cards in this deck are " + news.join(", ")}` (for grammar), then
+> Check how many recent cards there actually are, and phrase the text surrounding their names differently depending on the answer. "news.join(", ")" puts together the items in news separated by a comma and a space.
 - `let verdict = additions + ", first printed in " + lastSet + ". Your deck is up to date as of " + lastDay + "."`
+> Take the "additions" text we just defined, add a message about the set and date involved, and call the whole thing __verdict__ so it's easier to carry around.
 9. Put __verdict__ back into the document in its designated results div.
+> This will put the contents of __verdict__ into one of those previously-empty boxes (divs) in the page the user sees. This is the first and only part of the dating process that changes something a person looking at the front page would be aware of.
 
 ## later
 
