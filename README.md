@@ -88,3 +88,11 @@ Append __update__ to the results.
 - If any is `>` existing __max__, STOP HERE and do a round of *carpentry* updates: __cards__ is missing a set. (Restart with the same __deck__ after this. May want a loading message to let the user know.)
 - If all are `<=` existing __max__, assume Scryfall's more sophisticated fuzzy search caught user typos we couldn't. 
 - Add __friends__ whose `released_at` date also `=` __max__ to the final output.
+
+## notes 
+
+#### on function and variable names 
+
+- *Carpentry* (and related/resulting names; yes, that includes *jesus*) is the thing that makes tables.
+- Within `for (i = 0; i < newSets.length; i++)`, __jefferson__ exists to ferry __what__ the user may have missed to __updates__. In other words, [it is a Hamilton joke](https://genius.com/Daveed-diggs-leslie-odom-jr-okieriete-onaodowan-and-original-broadway-cast-of-hamilton-whatd-i-miss-lyrics), my dudes and non-dudes.
+- __strangers__ are just __friends__ who haven't shared their ~~secrets~~ set codes yet.
