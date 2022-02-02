@@ -10,7 +10,13 @@ Uses Scryfall data.
 
 1. Fetch latest version of Scryfall's unique card art bulk-data json object.
 2. Unpack Scryfall json into a table in database for manipulation (henceforth __bulk__)
-3. 
+3. `SELECT name, oracle_id, released_at, set INTO cards FROM bulk WHERE reprint = 'false' AND multiverse_ids IS NOT NULL`.
+
+Here, make a lighter-weight table of only salient information (from our perspective) about cards that aren't reprints and that exist in Gatherer (which prunes out tokens and the like); its name is __cards__.
+
+***To do:*** Determine when to trigger `DROP TABLE bulk`.
+
+***To do:*** Automate updates to __cards__. Maybe check the number of known sets on Scryfall once a week, and rehydrate the *carpentry* when it changes?
 
 ## interface
 
@@ -84,7 +90,7 @@ Append __update__ to the results.
 - Assume for the time being that we have that information, as __strangers__.
 - Search Scryfall API for those cards by name. (Remember: 10 searches per second.) 
 - Results that are real cards (found on Scryfall, not a reprint, not a token, etc.) and weren't in __cards__ are now __friends__. (Because we've met them.)
-- Check the released_at of our new __friends__. 
+- Check the `released_at` of our new __friends__. 
 - If any is `>` existing __max__, STOP HERE and do a round of *carpentry* updates: __cards__ is missing a set. (Restart with the same __deck__ after this. May want a loading message to let the user know.)
 - If all are `<=` existing __max__, assume Scryfall's more sophisticated fuzzy search caught user typos we couldn't. 
 - Add __friends__ whose `released_at` date also `=` __max__ to the final output.
