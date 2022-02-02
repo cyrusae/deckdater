@@ -45,33 +45,67 @@ Have existing value __max__, the most recent known update of the deck as entered
 Call Scryfall for the current list of sets as __allSets__.
 
 `function recency(date) { return date >= max; };`
+
 `let newSets = allSets.filter(recency);`
 `let updates = [];`
+
 `for (i = 0; i < newSets.length; i++) {`
+
 `if (newSets.newSets[i].set_type === (core || expansion || draft_innovation || commander)) {`
+
 ` let which = newSets.newSets[i].name;`
+
 ` let what = newSets.newSets[i].code;`
+
 ` let when = newSets.newSets[i].released_at;`
+
 ` let jefferson = which + " (" + what + "), released " + when;`
+
 ` updates.push(jefferson);`
+
 ` }` 
+
 `};`
 
+
 `if (updates.length === 0) {`
+
 ` let update = "This deck is up to date!";`
+
 ` return update;`
+
 `} else if (updates.length === 1) {`
+
 ` let update = "This deck was last updated prior to " + updates[0] + ".";`
+
 ` return update;`
+
 `} else if (updates.length === 2) {`
+
 ` let update = "This deck has not been updated since before " + updates.[0] + ", and " + updates[1] + ", came out.";`
+
 ` return update;`
+
 `} else {`
+
 ` let penultimate = updates.slice(0, (updates.length - 2));`
+
 ` let update = "Since this deck was last updated, the following sets have been released: " penultimate.join("; ") + "and " + updates[(updates.length - 1)] + ".";`
+
 ` return update;`
+
 `}`
 
 Append __update__ to the results.
 
 #### In case of unfamiliar cards 
+
+**Needs:** A way to determine which card names in __deck__ that appear to be otherwise legit *didn't* find a match in __cards__.
+
+- Assume for the time being that we have that information, as __strangers__.
+- Search Scryfall API for those cards by name. (Remember: 10 searches per second.) 
+- Results that are real cards (found on Scryfall, not a reprint, not a token, etc.) and weren't in __cards__ are now __friends__. (Because we've met them.)
+- Check the released_at of our new __friends__. 
+- If any is > existing __max__, STOP HERE and do a round of *carpentry* updates: __cards__ is missing a set. (Restart with the same __deck__ after this. May want a loading message to let the user know.)
+- If all are <= existing __max__, Scryfall's more sophisticated fuzzy search caught user typos we couldn't. 
+- Add __friends__ whose released_at date also = __max__ to the final output.
