@@ -44,6 +44,7 @@ Have existing value __max__, the most recent known update of the deck as entered
 
 Call Scryfall for the current list of sets as __allSets__.
 
+~~~
 `function recency(date) { return date >= max; };`
 
 `let newSets = allSets.filter(recency);`
@@ -95,6 +96,7 @@ Call Scryfall for the current list of sets as __allSets__.
 ` return update;`
 
 `}`
+~~~
 
 Append __update__ to the results.
 
