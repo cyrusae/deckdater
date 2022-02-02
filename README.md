@@ -4,6 +4,8 @@ Tool for determining when a MtG decklist was last up to date, so you know which 
 
 Uses Scryfall data.
 
+A copy of this page with inline explanations for a non-tech audience can be found as `READMORE.md`.
+
 ## interface
 
 *Frontend visible to the user.*
