@@ -45,6 +45,7 @@ Here, make a lighter-weight table of only salient information (from our perspect
 2. Produce a string of comma-separated user-entered search terms, __deck__
 3. Define const __max__ by doing `SELECT MAX(released_at) FROM cards WHERE name LIKE` with __deck__.
 4. Use __max__ and __deck__ in `SELECT name, released_at, set FROM cards WHERE date = ? HAVING name = ?`.
+#### Note: This may be more efficient to do by creating a (temporary) table for thisDeck in order to only perform a __deck__-based search once.
 5. Bring the result of (4) in as __latest__.
 6. Define const __lastSet__ as `latest.latest[0].set` and const __lastDay__ as `latest.latest[0].released_at`.
 7. Break the various `name`s out of __latest__ as their own array __news__.
