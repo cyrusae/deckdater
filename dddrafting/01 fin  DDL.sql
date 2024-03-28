@@ -60,7 +60,7 @@ create table tblUSER (
  IsInactive char(1) SPARSE NULL)
 
 insert into tblUSER (UserDOB, Email, FirstName, LastName, UserName)
- VALUES ('1993-09-20', 'martin.e.durham@outlook.com', 'Martin', 'Durham Eosphoros', 'Emperor'), ('1995-08-03', 'cyrus.eosphoros@gmail.com', 'Cyrus', 'Eosphoros', 'Magician') --two manually-entered test users for reasons that will become apparent eventually, and also because I am gay 
+ VALUES ('1993-09-20', 'martin.e@o.com', 'Martin', 'Durham Eosphoros', 'Emperor'), ('1995-08-03', 'ce@g.com', 'Cyrus', 'Eosphoros', 'Magician') --two manually-entered test users for reasons that will become apparent eventually, and also because I am gay 
 
 create table defLAYOUT (
  LayoutID int Identity(1,1) primary key NOT NULL,
