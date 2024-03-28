@@ -1,0 +1,274 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(odbc)
+library(DBI)
+library(data.table)
+library(jsonlite)
+library(tidyverse)
+library(stringr)
+library(tictoc) #benchmarking
+con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "ODBC Driver 17 for SQL Server",
+                      Server = "localhost\\DAWNFIRE",
+                      Database = "deckdater",
+                      Trusted_Connection = "Yes")
+```
+
+```{r}
+glob <- file.choose()
+```
+```{r}
+tic("load-in from json file")
+tic("from JSON")
+blob <- fromJSON(glob)
+toc()
+tic("to table")
+blorb <- as.data.table(blob)
+tic()
+toc()
+
+```
+```{r}
+tic("load in sets")
+tic("local setup")
+setwd("C:/Users/cyrus/GitHere/deckdater")
+options(timeout = 60000)
+filepath <- paste0(getwd(), "/upd8_sets/")
+filename <- paste0("sets_", Sys.Date(), ".json")
+toc()
+tic("download file")
+download.file("https://api.scryfall.com/sets/", paste0(filepath, filename))
+toc()
+tic("read in sets from json")
+upd8sets <- fromJSON(paste0(filepath, filename))
+toc()
+tic("file as datatable")
+news <- as.data.table(upd8sets)
+toc()
+toc()
+```
+```{r}
+tic()
+tic("local setup")
+setwd("C:/Users/cyrus/GitHere/deckdater")
+options(timeout = 60000)
+filepath <- paste0(getwd(), "/upd8_cards/")
+filename <- paste0("cards_all_", Sys.Date(), ".json")
+toc()
+tic("get url to download that")
+getURLs <- as.data.table(fromJSON("https://api.scryfall.com/bulk-data/"))
+tic("default cards")
+filename <- paste0("cards_default_", Sys.Date(), ".json")
+useURL <- getURLs[data.type == "default_cards", data.download_uri]
+tic("download the default cards")
+download.file(useURL, paste0(filepath, filename))
+toc()
+tic("load in default cards")
+tic("from json")
+oracles <- fromJSON(paste0(filepath, filename))
+toc()
+tic("to table")
+oracletable <- as.data.table(oracles)
+toc()
+toc()
+```
+
+```{r}
+tic("bulk cards")
+useURL <- getURLs[data.type == "all_cards", data.download_uri]
+tic("scryfall will you let me download the bige file today???")
+download.file(useURL, paste0(filepath, filename))
+toc()
+tic("read in big file")
+tic("json")
+bulk <- fromJSON(paste0(filepath, filename))
+toc()
+tic("tabale")
+bulktable <- as.data.table(bulk)
+toc()
+toc()
+toc()
+```
+
+```{r}
+tic("redefine the blorb now")
+tic("read in json")
+blorb <- fromJSON(paste0(filepath, filename))
+toc()
+tic("can I just setDT that")
+setDT(blorb)
+toc()
+toc()
+```
+```{r}
+cardtable <- as.data.table(cardtable)
+tic("here's some filtering")
+tic("cardtable key")
+setkey(cardtable, id)
+toc()
+tic("filter 'actual cards'")
+actualcards <- cardtable[layout != "token", ]
+toc()
+tic("actualcards key")
+setkey(actualcards, id)
+toc()
+tic("filter 'funny cards'")
+funnycards <- actualcards[set_type == "funny", ]
+toc()
+tic("funnycards key")
+setkey(funnycards, id)
+toc()
+tic("filter 'really cards'")
+reallycards <- actualcards[!funnycards, ]
+toc()
+tic("reallycards key")
+setkey(reallycards, id)
+toc()
+tic("filter 'actually it's a token lmao' (actualtokens)")
+actualtokens <- cardtable[!actualcards, ]
+toc()
+tic("actualtokens key")
+setkey(actualtokens, id)
+toc()
+tic("filter funnytokens")
+funnytokens <- actualtokens[set_type == "funny", ]
+tic()
+tic("funnytokens key")
+setkey(funnytokens, id)
+toc()
+tic("filter reallytokens")
+reallytokens <- actualtokens[!funnytokens, ]
+toc()
+tic("reallytokens key")
+setkey(reallytokens, id)
+toc()
+toc()
+```
+
+not use:
+```{r}
+actualtokens <- cardtable[layout == "token", ]
+setkey(actualtokens, id)
+realCards <- cardtable[!funnycards, on = .(id)][!actualtokens, on = .(id)]
+funnytokens <- actualtokens[set_type == "funny", ]
+setkey(funnytokens, id)
+realTokens <- actualtokens[!funnytokens, on = .(id)]
+
+```
+specialize wiggling
+```{r}
+specialists <- cardtable[oracle_text %like% 'Specialize', ]
+```
+```{r}
+specialists[, c("noun", "fluff") := tstrsplit(name, "^(\\w+)") ]
+specialists[, noun := str_remove(name, fluff) ]
+specializations <- cardtable[set_id %in% specialists$set_id, ]
+specializations[, c('noun', 'fluff') := tstrsplit(name, "(^\\w+)")]
+specializations[, noun := str_remove(name, fluff) ]
+setkey(specializations, noun)
+setkey(specialists, noun)
+specialized <- specializations[specialists, nomatch = NULL]
+specialized <- specialized[type_line %like% 'Creature', ][!specialists, on = .(id)]
+specialists <- subset(specialists, select = c(id, name, noun))
+specialized <- specialized[specialists, on = .(noun)]
+specialized <- subset(specialized, select = c(id, name, set, noun, i.id.1))
+```
+```{r}
+specialized[, layout := "specialize"]
+```
+```{r}
+basiclands <- c("Plains", "Island", "Swamp", "Mountain", "Forest")
+```
+
+```{r}
+reallycards <- reallycards[!(name %in% basiclands), ]
+```
+```{r}
+unique(reallycards$layout)
+```
+```{r}
+faces <- cardtable[!(card_faces == "NULL"), card_faces]
+```
+```{r}
+facefix <- fromJSON(file.choose())
+```
+```{r}
+what <- facefix[facefix$card_faces != 'NULL', ]
+what <- what[what$layout != 'art_series', ]
+what <- what[what$layout != 'double_faced_token', ]
+```
+
+```{r}
+reallyin <- function(a, b) {
+  c <- bind_cols(a, b)
+  c
+}
+innerst <- function(cot) {
+  st <- cot[1] %>% as.data.table()
+    if (length(cot) > 1) {
+      for (i in 2:seq_along(cot)) {
+        st <- reallyin(st, as.data.table(cot[i]))
+      }
+    }
+  st 
+}
+do <- function(dtv) {
+  cv <- sapply(dtv, innerst)
+  cv
+}
+```
+```{r}
+tic('testing')
+test <- do(what$card_faces)
+toc()
+try <- unlist(test)
+try <- bind_cols(try)
+```
+```{r}
+ok <- what$card_faces[1]
+okok <- as.data.table(ok)
+go <- what$card_faces[789]
+gogo <- as.data.table(go)
+okgo <- bind_rows(okok, gogo)
+
+soft <- function(g, o) {
+  
+}
+
+slow <- function(r) {
+  r <- as.data.table(r)
+  o <- as.data.table(r[1])
+  j <- sapply(r, bind_rows, o)
+}
+
+sleep <- function(r) {
+  x <- r[[1]]
+  x <- as.data.table(x)
+  for (i in 1:length(r)) {
+    y <- r[[i]]
+    y <- as.data.table(y)
+    x <- bind_rows(x, y)
+  }
+  x
+}
+
+t <- c(what$card_faces[1], what$card_faces[23], what$card_faces[343])
+
+tx <- sleep(t)
+
+
+
+tic('DOES IT WORK')
+wk <- sleep(what$card_faces)
+toc()
+
+cleanup <- wk[is.na(layout), ]
+q <- distinct(cleanup)
+```
+

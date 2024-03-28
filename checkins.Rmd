@@ -1,0 +1,254 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r echo=FALSE }
+library(DBI)
+library(odbc)
+library(data.table)
+library(tidyverse)
+library(tictoc)
+con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "ODBC Driver 17 for SQL Server",
+                      Server = "localhost\\DAWNFIRE",
+                      Database = "deckdater_dev",
+                      Trusted_Connection = "Yes")
+```
+```{r}
+dbDisconnect(con)
+```
+
+```{r}
+gotcha <- fread("C:/Users/cyrus/GitHere/deckdater/starter_cards.csv")
+gotchafrag <- gotcha[1:10,]
+
+gotcha2 <- framework2[, 2:15]
+```
+```{r}
+dbWriteTable(con, "WORK_FROM", gotcha)
+```
+
+
+```{r}
+library(data.table)
+setwd("C:/Users/cyrus/GitHere/deckdater")
+viz <- list.files(paste0(getwd(),"/upd8_sets"), "*.csv", full.names = TRUE)
+setsy <- fread(viz[2])
+setsy[setsy==""] <- NA
+blockme <- setsy[, block_code:block]
+blockme <- unique(na.omit(blockme))
+fwrite(blockme, "blocks.csv")
+card <- list.files(paste0(getwd(), '/upd8_cards'), '*.csv', full.names = TRUE)
+#cardme <- fread("C:/Users/cyrus/GitHere/deckdater/upd8_cards/BASICASS_cards_2.csv")
+langs <- fread(card[3])
+#safme <- cardme[!is.na(face),]
+#lightme <- cardme[name == "Lightning Bolt",]
+```
+```{r}
+cardme$reprint <- as.character(cardme$reprint)
+cardme[reprint == "FALSE", reprint := NA]
+cardme[reprint == "TRUE", reprint := "Y"]
+supertypes <- c("Basic", "Legendary", "Host", "Elite", "Snow",  "Token") #I know tokens aren't a card type but they're a permanent type in the same spirit so shut up 
+cardme[subtype == "", subtype := NA]
+
+supertest <- cardme[type %like% 'Legendary|Basic|Snow|Host|Elite',]
+str_extract_all(supertest[name %like% 'Jorn',]$type, 'Legendary|Basic|Snow|Host|Elite')
+supertest[, supertype := str_extract_all(type, 'Legendary|Basic|Snow|Host|Elite')][, just_type := str_remove_all(type, 'Legendary|Basic|Snow|Host|Elite')]
+```
+```{r}
+setnames(cardme, "type", "typeline")
+cardme[, supertype := str_extract_all(typeline, 'Legendary|Basic|Snow|Host|Elite|Ongoing|Token')][, type := str_remove_all(typeline, 'Legendary|Basic|Snow|Host|Elite|Ongoing|Token')]
+cardme[, supertype := as.character(supertype)][, type := as.character(type)]
+cardme[supertype == "NA", supertype := ""]
+cardme[cardme == ""] <- NA
+
+cardme[, supertype := str_remove_all(supertype, 'c\\(')]
+cardme[, supertype := str_remove_all(supertype, '[[:punct:]]')]
+
+refineee <- subset(cardme, select = c("oracle_id", "name", "machiname", "uri", "scryfall_uri", "layout", "face", "supertype", "type", "subtype", "set_id", "rarity", "games", "reprint"))
+
+fwrite(refineee, "C:/Users/cyrus/GitHere/deckdater/starter_cards.csv")
+```
+```{r}
+cutfun <- firstpass[set_type == "funny",]$oracle_id
+```
+
+```{r}
+supertypes <- na.omit(refineee$supertype) %>% as_tibble() %>% separate_rows(value, sep = " ") %>% unique() %>% na.omit() %>% as.data.table()
+types <- na.omit(refineee[!(oracle_id %in% cutfun)]$type) %>% as_tibble() %>% separate_rows(value, sep = " ") %>% unique() %>% na.omit() %>% as.data.table()
+subtypes <- na.omit(refineee[!(oracle_id %in% cutfun)]$subtype) %>% as_tibble() %>% separate_rows(value, sep = " ") %>% unique() %>% na.omit() %>% as.data.table()
+```
+
+```{r}
+languages <- unique(langs$lang) %>% na.omit()
+settypes <- unique(setsy$set_type) %>% na.omit()
+layouts <- unique(cardme$layout) %>% na.omit()
+rarities <- unique(cardme$rarity) %>% na.omit()
+write_lines(languages, "C:/Users/cyrus/GitHere/deckdater/refmat/langy.txt")
+write_lines(settypes, "C:/Users/cyrus/GitHere/deckdater/refmat/settypelist.txt")
+write_lines(supertypes, "C:/Users/cyrus/GitHere/deckdater/refmat/supertypes.txt")
+write_lines(subtypes, "C:/Users/cyrus/GitHere/deckdater/refmat/unfunnysubtypes.txt")
+write_lines(types, "C:/Users/cyrus/GitHere/deckdater/refmat/unfunnytypes.txt")
+write_lines(cutfun, "C:/Users/cyrus/GitHere/deckdater/refmat/_cutfunnies.txt")
+write_lines(layouts, "C:/Users/cyrus/GitHere/deckdater/refmat/mostlayouts.txt")
+write_lines(rarities, "C:/Users/cyrus/GitHere/deckdater/refmat/rarityoverkill.txt")
+```
+```{r}
+lookit <- fread("C:/Users/cyrus/GitHere/deckdater/starter_cards.csv")
+lookit[lookit==""] <- NA
+```
+```{r}
+setnames(setsy, c("SetID", "SetCode", "SetName", "SetScryfallAPI", "SetScryfallURI", "SetReleaseDate", "SetTypeName", "CollectorCount", "SetIsDigital", "BlockCode", "BlockName"))
+setnames(lookit, c("CardID", "CardFaceName", "CardFaceSearchName", "CardSetScryfallAPI", "CardSetScryfallURI", "LayoutName", "FaceName", "Supertypes", "Types", "Subtypes", "SetID", "RarityName", "PlatformList", "IsReprint"))
+```
+```{sql, connection=con}
+#delete from SCRY_CANON_CARDS
+```
+
+```{r}
+tic("inserts...")
+tic("pure insert, sets, 351 rows")
+dbWriteTable(con, "SCRY_CANON_SETS", setsy, append = TRUE)
+toc()
+tic("pure insert, cards, 57306 rows")
+dbWriteTable(con, "SCRY_CANON_CARDS", lookit, append = TRUE)
+toc()
+toc()
+```
+
+```{r}
+refs <- list.files("C:/Users/cyrus/GitHere/deckdater/refmat/", "*.txt", full.names = TRUE)
+```
+```{r}
+
+```
+
+```{r}
+setnames(blockme, c("BlockCode", "BlockName"))
+tic("add blocks...")
+dbWriteTable(con, "tblBLOCK", blockme, append = TRUE)
+toc()
+```
+```{r}
+tic("read in ref data for shits and giggles")
+lay <- read_lines(refs[3]) %>% as.data.table() %>% melt() %>% setnames("LayoutName")
+rare <- read_lines(refs[4]) %>% as.data.table() %>% melt() %>% setnames("RarityName")
+sets <- read_lines(refs[5]) %>% as.data.table() %>% melt() %>% setnames("SetTypeName")
+#the weird ones...
+sup <- paste(readLines(refs[6]), collapse = "\n")
+sub <- read_lines(refs[7])
+types <- read_lines(refs[8])
+toc()
+```
+```{r}
+#dbWriteTable(con, "defSET_TYPE", sets, append = TRUE)
+#dbWriteTable(con, "defRARITY", rare, append = TRUE)
+#dbWriteTable(con, "defLAYOUT", lay, append = TRUE )
+#dbWriteTable(con, "defSUPERTYPE", supertypes, append = TRUE)
+#dbWriteTable(con, "defTYPE", types, append = TRUE)
+```
+```{r}
+supertypes %<>% as.data.table()
+setnames(supertypes, "SupertypeName")
+```
+```{r}
+types <- lookit$Types %>% as.data.table() %>% setnames("TypeName") %>% separate_rows(everything(), sep = " ") %>% as.data.table() %>% unique()
+```
+```{r}
+subtypes <- c("Kor", "Cleric", "Horror", "Adventure", "Human", "Rogue", "Werewolf", "Vehicle", "Wizard", "Jace", "Peasant", "Spirit", "Construct", "Faerie", "Berserker", "Saga", "Fox", "Monk", "Eldrazi", "Reflection", "Vampire", "Elephant", "Giant", "Aura", "Curse", "Leech", "Dragon", "Moonfolk", "Goblin", "Shaman", "Serpent", "Frog", "Demon", "Scarecrow", "Equipment", "Soldier", "Warlock", "Merfolk", "Noble", "Elf", "Druid", "Plant", "Insect", "Kraken", "Knight", "God", "Snake", "Avatar", "Rowan", "Will", "Naga", 
+"Warrior", "Pegasus", "Bird", "Fish", "Homunculus", "Elemental", "Angel", "Egg", "Archer", "Ranger", "Wall", "Eye", "Djinn", "Efreet", "Advisor", "Beast", "Lukka", "Zombie", "Golem", "Specter", "Ogre", "Scorpion", "Scout", "Rat", "Badger", "Arlinn", "Samurai", "Gideon", "Shapeshifter", "Orc", "Nissa", "Unicorn", "Spider", "Hippogriff", "Assassin", "Elder", "Bolas", "Treefolk", "Mutant", "Chandra", "Tibalt", "Bat", "Pest", "Cat", "Fungus", "Liliana", "Dwarf", "Troll", "Minotaur", "Garruk", "Hag", "Nightmare", "Lizard", "Gargoyle", "Sliver", "Siren", "Pirate", "Horse", "Hydra", "Gate", "Dakkon", "Phyrexian", "Gremlin", "Nightstalker", "Beeble", "Hellion", "Ally", "Kirin", "Thopter", "Artificer", "Rhino", "Imp", "Wurm", "Vedalken", "Ninja", "Drake", "Sphinx", "Spellshaper", "Nomad", "Dinosaur", "Ajani", "Ox", "Viashino", "Urza’s", "Power-Plant", "Shade", "Dog", "Arcane", "Mountain", "Forest", "Camel", "Teferi", "Dryad", "Incarnation", "Chimera", "Wraith", "Licid", "Zubera", "Gorgon", "Crocodile", "Minion", "Griffin", "Skeleton", "Gnome", "Elk", "Dauthi", "Praetor", "Kithkin", "Boar", "Basilisk", "Leviathan", "Jackal", "Pilot", "Ooze", "Island", "Plains", "Illusion", "Mercenary", "Devil", "Mystic", "Yanling", "Nephilim", "Ape", "Slith", "Monkey", "Swamp", "Nahiri", "Yeti", "Wolf", "Ouphe", "Tiefling", "Centaur", "Raccoon", "Ellywick", "Crab", "Nymph", "Trap", "Juggernaut", "Drone", "Archon", "Barbarian", "Hippo", "Squid", "Metathran", "Desert", "Shark", "Lesson", "Jellyfish", "Salamander", "Minsc", "Atog", "Cyclops", "Myr", "Whale", "Orgg", "Cephalid", "Kobold", "Elminster", "Tower", "Bear", "Antelope", "Class", "Satyr", "Rebel", "Spike", "Karn", "Daretti", "Halfling", "Otter", "Azra", "Ashiok", "Phoenix", "Mine", "Squirrel", "Citizen", "Turtle", "Aetherborn", "Samut", "Hyena", "Shrine", "Bard", "Goat", "Thrull", "Kiora", "Tamiyo", "Carrier", "Lhurgoyf", "Rune", "Background", "Monger", "Pangolin", "Clue", "Tezzeret", "Dack", "Demigod", "Saheeli", "Harpy", "Yanggu", "Sorin", "Cockatrice", "Calix", "Gnoll", "Angrath", "Jaya", "Kavu", "Processor", "Trilobite", "Thalakos", "Octopus", "Nixilis", "Lair", "Mongoose", "Tyvar", "Kaya", "Rabbit", "Wrenn", "Bringer", "Aminatou", "Kasmina", "Surrakar", "Sarkhan", "Homarid", "Vraska", "Soltari", "Elspeth", "Gith", "Weird", "Domri", "Ugin", "Assembly-Worker", "Davriel", "Masticore", "Cartouche", "Wombat", "Ferret", "Beholder", "Windgrace", "Lammasu", "Volver", "Dovin", "Slug", "Mole", "Basri", "Mouse", "Coward", "Flagbearer", "Kaito", "Aurochs", "Oyster", "Jeska", "Locus", "Treasure", "Szat", "Mordenkainen", "Astartes", "Estrid", "Worm", "Oko", "Starfish", "Vivien", "Huatli", "Xenagos", "Phelddagrif", "Manticore", "Dihada", "Venser", "Wolverine", "Lamia", "Lolth", "Sheep", "Rigger", "Narset", "Noggle", "Food", "Teyo", "Ral", "Grist", "Zariel", "Brushwagg", "Niko", "Freyalise", "Sponge", "Dreadnought", "Fortification", "Nautilus", "Serra", "Bahamut", "Spawn", "Fractal", "Sable", "Tasha", "Koth", "Walrus")
+```
+```{r}
+types %<>% as.data.table()
+setnames(types, "TypeName")
+```
+```{r}
+dbWriteTable(con, "defTYPE", types, append = TRUE)
+```
+
+
+```{sql, connection=con}
+select * from defTYPE
+```
+
+```{r}
+wordle <- read_lines("C:/Users/cyrus/GitHere/deckdater/randomwords.txt") %>% as.data.table()
+
+setnames(wordle, "Word")
+wordle[, Word := str_to_title(Word)]
+```
+
+```{r}
+library(stopwords)
+
+stops <- stopwords()
+stops %<>% as.data.table()
+setnames(stops, "Word")
+stops[, Word := str_remove_all(Word, "[[:punct:]]")]
+stops[, Word := str_to_title(Word)]
+
+stops <- unique(stops)
+```
+```{r}
+setkey(stops, Word)
+setkey(wordle, Word)
+
+dupe <- wordle[!stops]
+
+undup <- wordle[!dupe]
+```
+```{r}
+dbWriteTable(con, "UN_Wordle", wordle, append = TRUE)
+dbWriteTable(con, "UN_StopWord", stops, append = TRUE)
+```
+```{r}
+machin <- c("standard", "historic", "gladiator", "pioneer", "explorer", "modern", "legacy", "pauper", "vintage", "penny", "commander", "brawl", "historicbrawl", "alchemy", "paupercommander", "duel", "premodern", "oldschool")
+```
+
+ "legalities": {
+    "standard": "not_legal",
+    "future": "not_legal",
+    "historic": "legal",
+    "gladiator": "legal",
+    "pioneer": "legal",
+    "explorer": "legal",
+    "modern": "legal",
+    "legacy": "legal",
+    "pauper": "not_legal",
+    "vintage": "legal",
+    "penny": "legal",
+    "commander": "legal",
+    "brawl": "not_legal",
+    "historicbrawl": "legal",
+    "alchemy": "not_legal",
+    "paupercommander": "not_legal",
+    "duel": "legal",
+    "oldschool": "not_legal",
+    "premodern": "not_legal"
+```{sql, connection=con}
+select * from defFORMAT_NAME
+```
+```{r}
+machin %<>% as.data.table() %>% setnames("FormatNameMachineReadable")
+
+setcolorder(machin, c("FormatName", "FormatNameMachineReadable"))
+dbWriteTable(con, "defFORMAT_NAME", machin, append = TRUE)
+```
+```{sql, connection=con}
+select * from defFORMAT_NAME
+```
+
+```{r}
+dbWriteTable(con, "FLEETING_formats", classier)
+```
+```{r}
+guys1 <- fread("C:/Users/cyrus/GitHere/deckdater/dddrafting/stealcustomers.csv")
+guys2 <- fread("C:/Users/cyrus/GitHere/deckdater/dddrafting/stealuniversity.csv")
+```
+```{r}
+tic("GET A LOAD OF THESE GUYS!")
+dbWriteTable(con, "LOAD_OF_GUYS", guyser)
+toc()
+```
+

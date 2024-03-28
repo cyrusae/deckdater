@@ -1,0 +1,319 @@
+erDiagram
+	refSET_TYPE_STATUS }o--|| defSET_STATUS : is 
+
+	defFORMAT_MEDIUM ||--|{ refFORMAT : in 
+	defFORMAT_TYPE ||--|{ refFORMAT : in 
+	refSET_TYPE_STATUS }|--|| refFORMAT : in 
+	defFORMAT_NAME ||--|{ refFORMAT : is 
+	refFORMAT ||--o| refFORMAT_EPOCH : during
+	defSET_TYPE ||--o{ tblSET : is 
+	tblSET ||--o{ tblSET_PLANE : on 
+	tblSET_PLANE }o--|| defPLANE : is 
+	tblCARD_NOT_SET_STATUS }o--|| defCARD_STATUS : instead
+	tblCARD_NOT_SET_STATUS }o--|| refFORMAT : in 
+	refSET_TYPE_STATUS }|--|| defSET_TYPE : has 
+	tblCARD_FACE_SET ||--o{ tblCARD_FACE_SET_COST : has 
+	defTYPE ||--o{ tblCARD_FACE_TYPE : is 
+	defSUBTYPE ||--o{ tblCARD_FACE_SUBTYPE : is 
+	tblCARD_FACE_SET }|--|| tblCARD_FACE : printed
+	tblSET ||--o{ tblCARD_FACE_SET : in 
+	tblCARD_FACE_TYPE }|--|| tblCARD_FACE : has 
+	tblILLUSTRATION ||--o{ tblCARD_FACE_SET : with
+	tblARTIST ||--o{ tblILLUSTRATION_ARTIST : made 
+	tblILLUSTRATION_ARTIST }|--|| tblILLUSTRATION : by 
+	tblCARD_FACE_SUBTYPE }o--|| tblCARD_FACE : has 
+	tblUSER ||--o{ tblDECK : creates
+	tblDECK ||--|{ tblDECK_CARD : contains
+	tblCARD_NOT_SET_DATE |o--|| tblCARD_FACE_SET : exception
+	refCOST }o--|| defCOST_COLOR_TYPE : is 
+	tblCARD_FACE_SET ||--o{ tblCARD_NOT_SET_STATUS : exception
+	tblDECK_CARD }o--|| tblCARD_FACE : aka 
+	refCOST }o--|| defCOST_ALT_TYPE : is 
+	tblCARD_FACE ||--o{ tblCARD_FACE_COLOR : is 
+	defPLATFORM ||--o{ tblCARD_FACE_SET : on 
+	tblCARD_FACE_SET_COST }o--|| refCOST : of 
+	defWORD_TYPE ||--|{ refWORD : is 
+	defWORD_CLASS ||--o{ refWORD : is 
+	refWORD ||--o{ tblCARD_FACE_SET_WORD : is 
+	tblCARD_FACE_SET_WORD }o--|| tblCARD_FACE_SET : has
+	refCOST ||--o{ refCOST_COLOR : has 
+	refCOST_COLOR }o--|| defCOLOR : is 
+	tblCARD_FACE_COLOR }o--|| defCOLOR : is 
+	tblCARD_FACE }|--|| tblCARD : has
+	tblCARD_FACE ||--o{ tblCARD_FACE_SUPERTYPE : is 
+	tblCARD_FACE_SUPERTYPE }o--|| defSUPERTYPE : is 
+	tblCARD_FACE ||--o{ tblCARD_FACE_TRANS : translations
+	tblCARD_FACE_TRANS }o--|| defLANG : into 
+	tblFLAVOR ||--o{ tblCARD_FACE_SET : with
+	defFEATURE ||--o{ tblCARD_FACE_SET_FEATURE : has
+	defFEATURE_VALUE ||--o{ tblCARD_FACE_SET_FEATURE : of
+	tblCARD_FACE_SET_FEATURE }o--|| tblCARD_FACE_SET : has 
+	tblBLOCK ||--o{ tblSET : in 
+	defLAYOUT ||--|{ refLAYOUT_FACE : has 
+	defFACE ||--|{ refLAYOUT_FACE : is 
+	refLAYOUT_FACE ||--|{ tblCARD_FACE : is 
+	tblBLOCK {
+		int BlockID PK 
+		string BlockName
+	}
+	tblCARD {
+		UUID CardID PK 
+		string CardName 
+	}
+	tblCARD_FACE {
+		int CardFaceID PK 
+		UUID CardID FK 
+		string CardFaceName
+		int LayoutFaceID FK 
+	}
+	tblUSER {
+		int UserID PK 
+		string UserFname 
+		string UserLname
+		date UserDOB
+		datetime JoinDate
+		bool IsAccountInactive
+	}
+	tblDECK {
+		int DeckID PK 
+		int UserID FK 
+		string DeckName
+		datetime DateCreated
+		datetime DateUpdated
+		bool IsDeckPrivate
+	}
+	tblDECK_CARD {
+		int DeckID "PK,FK"
+		int CardFaceID "PK,FK"
+		int Quantity
+	}
+	defSUPERTYPE {
+		int SupertypeID PK 
+		string SupertypeName 
+	}
+	defTYPE {
+		int TypeID PK 
+		string TypeName 
+	}
+	defSUBTYPE {
+		int SubtypeID PK 
+		string SubtypeName 
+	}
+	defPLATFORM {
+		int PlatformID PK 
+		string PlatformName
+		string PlatformDesc
+	}
+	
+	defSET_STATUS {
+		int SetStatusID PK 
+		string SetStatusName
+		string SetStatusDesc
+	}
+	defCARD_STATUS {
+		int CardStatusID PK 
+		string CardStatusName 
+		string CardStatusDesc 
+	}
+	defSET_TYPE {
+		int SetTypeID PK 
+		string SetTypeName
+		string SetTypeDesc
+	}
+	refSET_TYPE_STATUS {
+		int SetTypeID "PK,FK"
+		int FormatID "PK,FK"
+		int SetStatusID FK
+	}
+	defFORMAT_MEDIUM {
+		int FormatMediumID PK 
+		string FormatMediumName
+		string FormatMediumDesc
+	}
+	defFORMAT_TYPE {
+		int FormatTypeID PK 
+		string FormatTypeName 
+		string FormatTypeDesc
+	}
+	defFORMAT_NAME {
+		int FormatNameID PK 
+		string FormatName 
+		string FormatNameMachineReadable 
+	}
+	refFORMAT_EPOCH {
+		int FormatID "PK,FK"
+		date EpochBeginDate 
+		date EpochEndDate
+	}
+	defCOLOR {
+		int ColorID PK
+		string ColorName 
+		string ColorCode
+	}
+	defLAYOUT {
+		int LayoutID PK 
+		string LayoutName 
+		string LayoutDesc
+		string LayoutSep
+	}
+	defFACE {
+		int FaceID PK 
+		string FaceName 
+		string FaceDesc 
+	}
+	refLAYOUT_FACE {
+		int LayoutFaceID PK 
+		int LayoutID FK 
+		int FaceID FK 
+	}
+	defFEATURE {
+		int FeatureID PK 
+		string FeatureName 
+		string FeatureDesc
+	}
+	defFEATURE_VALUE {
+		int FeatureValueID PK 
+		string FeatureValueAbbrev 
+		int FeatureValueNum 
+	}
+	tblCARD_FACE_SET_FEATURE {
+		int CardFaceSetID "PK,FK"
+		int FeatureID "PK,FK"
+		int FeatureValueID FK 
+	}
+	defLANG {
+		int LanguageID PK 
+		string LanguageName 
+		string LanguageAbbrev
+	}
+	tblCARD_FACE_TRANS {
+		int CardFaceID "PK,FK"
+		int LanguageID "PK,FK"
+		string CardFaceTransName
+	}
+	refFORMAT {
+		int FormatID PK 
+		int FormatMediumID FK 
+		int FormatTypeID FK 
+		int FormatNameID FK 
+	}
+	tblCARD_FACE_TYPE {
+		int CardFaceID "PK,FK"
+		int TypeID "PK,FK"
+	}
+	tblCARD_FACE_SUBTYPE {
+		int CardFaceID "PK,FK"
+		int SubtypeID "PK,FK"
+	}
+	tblCARD_FACE_SUPERTYPE {
+		int CardFaceID "PK,FK"
+		int SupertypeID "PK,FK"
+	}
+	tblCARD_NOT_SET_DATE {
+		int CardFaceSetID "PK,FK"
+		date CardReleaseDate 
+	}
+	tblILLUSTRATION {
+		UUID IllustrationID PK 
+		string IllustrationURI 
+	}
+	tblILLUSTRATION_ARTIST {
+		UUID IllustrationID "PK,FK"
+		UUID ArtistID "PK,FK"
+	}
+	tblARTIST {
+		UUID ArtistID PK 
+		string ArtistName 
+	}
+	defPLANE {
+		int PlaneID PK 
+		string PlaneName
+	}
+	tblSET_PLANE {
+		UUID SetID "PK,FK"
+		int PlaneID "PK,FK"
+	}
+	tblCARD_NOT_SET_STATUS {
+		int CardStatusExceptionID PK 
+		int CardFaceSetID FK 
+		int CardStatusID FK 
+		int FormatID FK 
+		date StatusBeginDate 
+		date StatusEndDate
+	}
+	defCOST_COLOR_TYPE {
+		int CostColorTypeID PK 
+		string CostColorTypeName 
+		string CostColorTypeDesc 
+	}
+	defCOST_ALT_TYPE {
+		int CostAltTypeID PK 
+		string CostAltTypeName 
+		string CostAltTypeDesc
+	}
+	refCOST {
+		int CostID PK 
+		string CostAbbrev 
+		int CostColorTypeID FK 
+		int CostAltTypeID FK 
+		int CostCMC
+	}
+	refCOST_COLOR {
+		int CostID "PK,FK"
+		int ColorID "PK,FK"
+	}
+	tblFLAVOR {
+		int FlavorID PK 
+		string FlavorText
+	}
+	tblCARD_FACE_SET_COST {
+		int CardFaceSetID "PK,FK"
+		int CostID "PK,FK"
+		int Quantity
+	}
+	tblCARD_FACE_SET_WORD {
+		int CardFaceSetID "PK,FK"
+		int WordID "PK,FK"
+	}
+	defWORD_CLASS {
+		int WordClassID PK 
+		string WordClassName 
+		string WordClassDesc
+	}
+	defWORD_TYPE {
+		int WordTypeID PK 
+		string WordTypeName 
+		string WordTypeDesc 
+	}
+	refWORD {
+		int WordID PK 
+		string WordName 
+		int WordTypeID FK 
+		int WordClassID FK 
+	}
+	tblCARD_FACE_COLOR {
+		int CardFaceID "PK,FK"
+		int ColorID "PK,FK"
+		bool IDNotColor
+	}
+	tblSET {
+		UUID SetID PK 
+		string SetCode
+		string SetName
+		date SetReleaseDate
+		string SetScryfallURI
+		string SetScryfallAPI 
+		int CollectorCount
+		bool SetIsDigital
+		int SetTypeID FK 
+		int BlockID FK 
+	}
+	tblCARD_FACE_SET {
+		int CardFaceSetID PK 
+		int CardFaceID FK 
+		int SetID FK 
+		int PlatformID FK 
+		string ScryfallURI 
+		string ScryfallAPI
+		int CardFaceSetCMC 
+	}

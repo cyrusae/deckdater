@@ -1,0 +1,1694 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r, echo=FALSE}
+library(odbc)
+library(DBI)
+library(data.table)
+library(jsonlite)
+library(tidyverse)
+library(stringr)
+library(tictoc) #benchmarking
+```
+```{r}
+con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "ODBC Driver 17 for SQL Server",
+                      Server = "localhost\\DAWNFIRE",
+                      Database = "deckdater",
+                      Trusted_Connection = "Yes")
+```
+```{r}
+tic("load in sets")
+tic("local setup")
+setwd("C:/Users/cyrus/GitHere/deckdater")
+options(timeout = 6000)
+filepath <- paste0(getwd(), "/", "upd8_sets")
+filename <- paste0("sets_", Sys.Date(), ".json")
+toc()
+tic("download file")
+download.file("https://api.scryfall.com/sets/", paste0(filepath, "/", filename))
+upd8sets <- fromJSON(paste0(filepath, "/", filename))
+toc()
+tic("file as datatable")
+news <- as.data.table(upd8sets)
+toc()
+toc()
+
+```
+```{r}
+tic("clean up columns")
+tic("drop importy blob")
+rm(upd8sets)
+toc()
+tic("change column names")
+colnames(news) <- sub("data.", "", colnames(news))
+toc()
+toc()
+```
+```{r}
+tic("remove columns")
+news <- subset(news, select = c(id, code, name, uri, scryfall_uri, released_at, set_type, card_count, digital, block_code, block))
+toc()
+```
+```{r}
+tic("remove sets with illegal set codes")
+news <- news[nchar(news$code) == 3]
+toc()
+```
+```{r}
+news[set_type == "spellbook"]
+```
+
+```{r}
+unique(news$set_type)
+dropSets <- c("masters", "masterpiece", "from_the_vault", "spellbook", "arsenal", "duel_deck", "token", "treasure_chest", "memorabilia", "premium_deck")
+```
+```{r}
+tic("drop sets without unique cards")
+tic("establish")
+dropSets <- c("masters", "masterpiece", "from_the_vault", "spellbook", "arsenal", "duel_deck", "token", "treasure_chest", "memorabilia", "premium_deck")
+toc()
+tic("drop")
+news <- news[!(set_type %in% dropSets)]
+rm(dropSets)
+toc()
+toc()
+```
+```{r}
+#allowances for my booleans 
+yesseR <- function(vec) {
+  v <- as.data.table(as.character(vec))
+  vec[vec == "TRUE"] <- "Y"
+  vec[vec == "FALSE"] <- "N"
+  vec
+}
+tic("replace True/False with Y/N")
+news$digital <- yesseR(news$digital)
+toc()
+```
+```{r}
+sapply(news, class)
+setnames(news, c("id", "uri", "scryfall_uri"), c("set_id", "scryfall_api", "scryfall_uri"))
+setnames(news, "code", "set_code")
+setnames(news, "name", "set_name")
+setnames(news, "block", "block_name")
+```
+```{sql, connection=con}
+create database deckdater
+```
+```{sql, connection=con}
+drop table SCRY_CANON_SETS
+```
+```{r}
+quotate <- function(dt) {
+  hold <- function(y) {
+    if (!is.na(y)) {
+      z <- paste0('"', as.character(y), '"')
+      z
+    } else {
+      z <- ""
+    }
+  }
+  enclose <- function(x) {
+    a <- lapply(x, hold)
+    a
+  }
+  for (i in seq_len(ncol(dt))) {
+    v <- dt[i, ]
+    q <- lapply(v, enclose)
+    dt[i, ] <- q
+  }
+}
+```
+```{r}
+rm(pls)
+```
+```{r}
+pls <- news$block_code 
+t <- function(x) {
+  y <- fifelse(is.na(x), as.character(NA), paste0('"', x, '"'))
+  
+}
+pls2 <- sapply(pls, t)
+z <- function(x) {
+  q <- sapply(x, t)
+  q
+}
+choop <- news 
+cheep <- as.data.table(z(choop))
+
+```
+
+
+```{sql, connection=con}
+create table SCRY_CANON_SETS (
+  CanonSetRowAdd int Identity(1,1) primary key NOT NULL,
+  set_id varchar(40) NOT NULL,
+  set_code varchar(5) NULL,
+  set_name varchar(255) NULL,
+  scryfall_api varchar(500) NULL,
+  scryfall_uri varchar(500) NULL,
+  released_at varchar(25) NULL,
+  set_type varchar(25) NULL,
+  card_count varchar(10) NULL,
+  digital varchar(3) NULL,
+  block_code varchar(5) NULL,
+  block_name varchar(255) NULL)
+```
+## set def tables
+```{sql, connection=con}
+create table /* IF NOT EXISTS */ defSET_TYPE (
+  SetTypeID int Identity(1,1) primary key NOT NULL,
+  SetTypeName varchar(25) unique NOT NULL,
+  SetTypeDesc varchar(200) NULL)
+
+create table /* IF NOT EXISTS */ defSET_STATUS (
+  SetStatusID int Identity(1,1) primary key NOT NULL,
+  SetStatusName varchar(25) unique NOT NULL,
+  SetStatusDesc varchar(200) NULL)
+```
+
+## block table
+```{sql, connection=con}
+create table /* IF NOT EXISTS */ tblBLOCK (
+  BlockID int Identity(1,1) primary key NOT NULL,
+  BlockCode char(3) unique NOT NULL,
+  BlockName varchar(100) unique NOT NULL,
+  BlockScryfallURI varchar(255) NULL,
+  BlockScryfallAPI varchar(255) NULL)
+```
+## set table
+```{sql, connection=con}
+create table /* IF NOT EXISTS */ tblSET (
+  SetID varchar(36) primary key NOT NULL,
+  SetCode char(3) NOT NULL,
+  SetName varchar(100) NOT NULL,
+  SetReleaseDate date,
+  SetScryfallURI varchar(255) NULL,
+  SetScryfallAPI varchar(255) NULL,
+  SetTypeID int FOREIGN KEY references defSET_TYPE NOT NULL,
+  BlockID int FOREIGN KEY references tblBLOCK NULL,
+  IsDigital char(1) NULL,
+  CONSTRAINT sets_in_one_place_at_once UNIQUE(SetCode, IsDigital))
+```
+## blocks 
+```{sql, connection=con}
+create OR alter function lookup_BlockIDbyCode(@Code char(3))
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select BlockID from tblBLOCK where BlockCode = @Code)
+  return @RET 
+  END 
+```
+
+### block lex procs
+```{sql, connection=con}
+create OR alter proc LEX_newBlockID 
+  @BlockCode char(3),
+  @BlockID int OUT 
+  as BEGIN 
+    insert into tblBLOCK(BlockCode)
+    VALUES (@BlockCode)
+    set @BlockID = dbo.lookup_BlockIDbyCode(@BlockCode)
+  END 
+```
+```{sql, connection=con}
+create OR alter proc LEX_addBlockName
+  @BlockID int,
+  @BlockName varchar(100)
+  as BEGIN 
+  if @BlockName != (select BlockName from tblBLOCK where BlockID = @BlockID)
+    BEGIN 
+    update tblBLOCK
+      set BlockName = @BlockName
+      where BlockID = @BlockID 
+    END 
+  END 
+```
+### block dict proc
+```{sql, connection=con}
+create OR alter proc DICT_addNewBlock 
+  @LetBlockCode char(3),
+  @LetBlockName varchar(100),
+  @VarBlockID int OUT 
+  as BEGIN 
+  exec dbo.LEX_newBlockID 
+    @BlockCode = @LetBlockCode,
+    @BlockID = @VarBlockID OUT
+  exec dbo.LEX_addBlockName
+    @BlockID = @VarBlockID, 
+    @BlockName = @LetBlockName 
+  END 
+```
+### wrangle blocks
+```{sql, connection=con}
+create OR alter proc FETCH_NewOrExistingBlock 
+  @ConstBlockCode char(3),
+  @ConstBlockName varchar(200) NULL,
+  @IsBlockID int OUT 
+  as BEGIN 
+  set @IsBlockID = dbo.lookup_BlockIDbyCode(@ConstBlockCode)
+  if @IsBlockID IS NULL 
+    BEGIN 
+      exec dbo.DICT_addNewBlock
+        @LetBlockCode = @ConstBlockCode,
+        @LetBlockName = @ConstBlockName,
+        @VarBlockID = @IsBlockID OUT
+    END
+    if @ConstBlockName IS NOT NULL
+        BEGIN
+          exec dbo.LEX_addBlockName
+            @BlockID = @IsBlockID,
+            @BlockName = @ConstBlockName
+        END
+  set @IsBlockID = dbo.lookup_BlockIDbyCode(@ConstBlockCode)
+  END 
+
+```
+## add the blocks
+```{r}
+blocks <- unique(subset(news, select = c(block_code, block_name)))
+blocks <- blocks[!is.na(blocks$block_code)]
+setnames(blocks, c("block_code", "block_name"), c("BlockCode", "BlockName"))
+dbAppendTable(con, "tblBLOCK", blocks)
+```
+```{sql, connection=con}
+select * from defSET_TYPE
+```
+
+## add types
+```{sql, connection=con}
+create OR alter proc LOAD_intoSetTypes
+  @IsSetTypeName varchar(25)
+  as BEGIN 
+  declare @ignore int
+  if not exists (select SetTypeID from defSET_TYPE where SetTypeName = @IsSetTypeName)
+    BEGIN   
+      exec dbo.AUTO_CheckIfNewSetType 
+        @SetTypeName = @IsSetTypeName,
+        @GotSetTypeID = @ignore OUT
+    END 
+  END 
+
+```
+
+```{r}
+types <- unique(news$set_type)
+types <- types[!is.na(types)]
+for (i in seq_len(length(types))) {
+  dbExecute(con, paste0("exec dbo.LOAD_intoSetTypes @IsSetTypeName = '",  types[[i]], "'"))
+}
+rm(i)
+
+```
+```{sql, connection=con}
+select * from defSET_TYPE
+```
+
+
+## lookups 
+### look up set type ID 
+```{sql, connection=con}
+create OR alter function lookup_SetTypeIDbyName(@VarSetTypeName varchar) 
+ RETURNS int 
+ as BEGIN 
+ declare @SetTypeID int 
+ set @SetTypeID = (select SetTypeID 
+  from defSET_TYPE 
+  where SetTypeName = @VarSetTypeName)
+ RETURN @SetTypeID
+ END
+```
+## set types 
+### lex: add new set type 
+```{sql, connection=con}
+create OR alter proc LEX_newSetTypeName
+ @SetTypeName varchar(25)
+ as BEGIN 
+  insert into defSET_TYPE(SetTypeName)
+   VALUES(@SetTypeName)
+ END 
+```
+### lex: add set description
+```{sql, connection=con}
+create OR alter proc LEX_addSetTypeDesc 
+ @NewSetTypeDesc varchar(200),
+ @SetTypeID int 
+ as BEGIN 
+  update defSET_TYPE 
+   set SetTypeDesc = @NewSetTypeDesc 
+   where SetTypeID = @SetTypeID 
+ END 
+```
+### dict new set type 
+```{sql, connection=con}
+create OR alter proc DICT_newSetType 
+ @LetSetTypeName varchar(25),
+ @LetSetTypeDesc varchar(200) NULL,
+ @VarSetTypeID int OUT 
+ as BEGIN 
+  set @VarSetTypeID = dbo.lookup_SetTypeIDbyName(@LetSetTypeName)
+  if @VarSetTypeID is NULL 
+    BEGIN 
+    exec dbo.LEX_newSetTypeName
+      @SetTypeName = @LetSetTypeName
+      set @VarSetTypeID = dbo.lookup_SetTypeIDbyName(@LetSetTypeName)
+    END 
+  if @LetSetTypeDesc IS NOT NULL 
+   BEGIN 
+   exec dbo.LEX_addSetTypeDesc 
+    @SetTypeID = @VarSetTypeID,
+    @NewSetTypeDesc = @LetSetTypeDesc 
+   END 
+ END 
+```
+### automated set type handling 
+```{sql, connection=con}
+create OR alter proc AUTO_CheckIfNewSetType 
+ @SetTypeName varchar(25),
+ @GotSetTypeID int OUT
+ as BEGIN  
+ set @GotSetTypeID = dbo.lookup_setTypeIDbyName(@SetTypeName)
+ if @GotSetTypeID IS NULL 
+  BEGIN 
+  exec dbo.DICT_newSetType 
+   @LetSetTypeName = @SetTypeName,
+   @LetSetTypeDesc = 'FLAG: This set type was added automatically. Have a human review when possible.',
+   @VarSetTypeID = @GotSetTypeID OUT 
+   set @GotSetTypeID = dbo.lookup_setTypeIDbyName(@SetTypeName)
+  END
+ END
+```
+## update info about a set
+```{sql, connection=con}
+create OR alter proc UPD8_CanonicalSet 
+ @WithSetID varchar(36),
+ @AsSetCode char(3) NULL,
+ @AsSetName varchar(100) NULL,
+ @AsSetReleaseDate date NULL,
+ @AsSetTypeID int NULL,
+ @AsSetScryfallURI varchar(255) NULL,
+ @AsSetScryfallAPI varchar(255) NULL,
+ @AsBlockID int NULL,
+ @AsSetIsDigital char(1) NULL 
+ as BEGIN 
+  if @AsSetCode IS NOT NULL 
+   update tblSET 
+    set SetCode = @AsSetCode 
+    where SetID = @WithSetID
+  if @AsSetName IS NOT NULL 
+   update tblSET 
+    set SetName = @AsSetName 
+    where SetID = @WithSetID 
+  if @AsSetReleaseDate IS NOT NULL 
+   update tblSET 
+    set SetReleaseDate = @AsSetReleaseDate 
+    where SetID = @WithSetID 
+  if @AsSetTypeID IS NOT NULL 
+   update tblSET 
+    set SetTypeID = @AsSetTypeID 
+    where SetID = @WithSetID
+  if @AsSetScryfallURI IS NOT NULL 
+   update tblSET 
+    set SetScryfallURI = @AsSetScryfallURI 
+    where SetID = @WithSetID 
+  if @AsSetScryfallAPI IS NOT NULL 
+   update tblSET 
+    set SetScryfallAPI = @AsSetScryfallAPI 
+    where SetID = @WithSetID 
+  if @AsBlockID IS NOT NULL 
+   update tblSET 
+    set BlockID = @AsBlockID 
+    where SetID = @WithSetID 
+  if @AsSetIsDigital IS NOT NULL 
+   update tblSET 
+    set IsDigital = @AsSetIsDigital 
+    where SetID = @WithSetID 
+ END 
+```
+### add a new set 
+```{sql, connection=con}
+create OR alter proc ADD_CanonicalSet 
+ @WithSetID varchar(36),
+ @AsSetCode char(3),
+ @AsSetName varchar(100),
+ @AsSetReleaseDate date,
+ @AsSetTypeID int,
+ @AsSetScryfallURI varchar(255) NULL,
+ @AsSetScryfallAPI varchar(255) NULL,
+ @AsBlockID int NULL,
+ @AsSetIsDigital char(1) 
+ as BEGIN 
+  insert into tblSET(SetID, SetCode, SetName, SetReleaseDate, SetTypeID, SetScryfallURI, SetScryfallAPI, BlockID, IsDigital)
+   VALUES(@WithSetID, @AsSetCode, @AsSetName, @AsSetReleaseDate, @AsSetTypeID, @AsSetScryfallAPI, @AsSetScryfallURI, @AsBlockID, @AsSetIsDigital)
+ END
+```
+
+### sets loader
+```{sql, connection=con}
+create OR alter proc LOAD_intoSets 
+ @ConstSetID varchar(36),
+ @ConstSetCode char(3),
+ @ConstSetName varchar(100),
+ @ConstSetReleaseDate date,
+ @ConstSetTypeID int,
+ @ConstSetScryfallURI varchar(255),
+ @ConstSetScryfallAPI varchar(255),
+ @ConstBlockID int,
+ @ConstSetIsDigital char(1) 
+ as BEGIN 
+ if exists (select SetID from tblSET where SetID = @ConstSetID)
+  BEGIN 
+   exec dbo.UPD8_CanonicalSet 
+    @WithSetID = @ConstSetID,
+    @AsSetCode = @ConstSetCode,
+    @AsSetName = @ConstSetName,
+    @AsSetReleaseDate = @ConstSetReleaseDate,
+    @AsSetTypeID = @ConstSetTypeID, 
+    @AsBlockID = @ConstBlockID,
+    @AsSetScryfallURI = @ConstSetScryfallURI,
+    @AsSetScryfallAPI = @ConstSetScryfallAPI,
+    @AsSetIsDigital = @ConstSetIsDigital
+   END 
+  ELSE 
+   BEGIN 
+    exec dbo.ADD_CanonicalSet 
+     @WithSetID = @ConstSetID,
+     @AsSetCode = @ConstSetCode,
+     @AsSetName = @ConstSetName,
+     @AsSetReleaseDate = @ConstSetReleaseDate,
+     @AsSetTypeID = @ConstSetTypeID,
+     @AsBlockID = @ConstBlockID,
+     @AsSetScryfallURI = @ConstSetScryfallURI,
+     @AsSetScryfallAPI = @ConstSetScryfallAPI,
+     @AsSetIsDigital = @ConstSetIsDigital
+   END 
+  END 
+```
+## trigger
+```{sql, connection=con}
+create OR alter TRIGGER t_CanonizeSet on SCRY_CANON_SETS
+  AFTER insert 
+  as BEGIN 
+  set NOCOUNT ON 
+  declare  @SetID varchar(36), 
+    @SetCode char(3), 
+    @SetName varchar(100),
+    @SetReleaseDate varchar(20),
+    @SetScryfallURI varchar(255),
+    @SetScryfallAPI varchar(255),
+    @SetTypeName varchar(25),
+    @SetBlockCode char(3),
+    @SetBlockName varchar(100),
+    @SetIsDigital char(1),
+    @SetBlockID int,
+    @CanonPK int,
+    @SetTypeID int 
+    
+  set @CanonPK = (select TOP 1 CanonSetRowAdd from inserted order by CanonSetRowAdd)
+  select @SetID = replace(set_id, '"', ''), 
+    @SetCode = Cast(replace(set_code, '"', '') as char(3)),
+    @SetName = replace(set_name, '"', ''), 
+    @SetReleaseDate = Cast(replace(released_at, '"', '') as date),
+    @SetScryfallAPI = replace(scryfall_api, '"', ''),
+    @SetScryfallURI = replace(scryfall_uri, '"', ''),
+    @SetTypeName = replace(set_type, '"', ''), 
+    @SetBlockCode = Cast(replace(block_code, '"', '') as char(3)),
+    @SetBlockName = replace(block_name, '"', ''),
+    @SetIsDigital = Cast(replace(digital, '"', '') as char(1))
+    from inserted where CanonSetRowAdd = @CanonPK 
+  set @SetTypeID = (select SetTypeID from defSET_TYPE where SetTypeName = @SetTypeName)
+
+  if @SetBlockCode is NOT NULL 
+    BEGIN 
+    exec dbo.FETCH_NewOrExistingBlock
+      @ConstBlockCode = @SetBlockCode,
+      @ConstBlockName = @SetBlockName,
+      @IsBlockID = @SetBlockID OUT 
+    END 
+
+  exec dbo.LOAD_intoSets 
+    @ConstSetID = @SetID,
+    @ConstSetCode = @SetCode,
+    @ConstSetName = @SetName,
+    @ConstSetReleaseDate = @SetReleaseDate,
+    @ConstSetTypeID = @SetTypeID,
+    @ConstSetScryfallURI = @SetScryfallURI,
+    @ConstSetScryfallAPI = @SetScryfallAPI,
+    @ConstBlockID = @SetBlockID,
+    @ConstSetIsDigital = @SetIsDigital 
+
+  DELETE from SCRY_CANON_SETS where CanonSetRowAdd = @CanonPK
+  END 
+```
+```{r}
+dbAppendTable(con, "SCRY_CANON_SETS", cheep)
+```
+
+# download cards
+```{r}
+options(timeout = 6000000)
+tic("ok cards now")
+tic("get bulk info")
+bulkindex <- as.data.table(fromJSON("https://api.scryfall.com/bulk-data"))
+toc()
+tic("get urls")
+defaultURI <- bulkindex[bulkindex$data.type == "default_cards", data.download_uri]
+allURI <- bulkindex[bulkindex$data.type == "all_cards", data.download_uri]
+toc()
+setwd("C:/Users/cyrus/GitHere/deckdater")
+filepath <- paste0(getwd(), "/upd8_cards/")
+defaultfile <- paste0("cards_default_", Sys.Date(), ".json")
+allfile <- paste0("cards_all_", Sys.Date(), ".json")
+tic("downloading default cards")
+download.file(defaultURI, paste0(filepath, defaultfile))
+toc()
+tic("downloading all cards")
+download.file(allURI, paste0(filepath, allfile))
+toc()
+toc()
+```
+```{r}
+allfile <- file.choose()
+```
+
+```{r}
+
+tic("loading cards from files")
+tic("load in default cards")
+tic("json")
+cards <- fromJSON("C:/Users/cyrus/GitHere/deckdater/upd8_cards/cards_default_2022-07-20.json")
+toc()
+tic("table")
+cardtable <- as.data.table(cards)
+rm(cards)
+toc()
+toc()
+tic("load in all cards")
+tic("json")
+bigblob <- fromJSON("C:/Users/cyrus/GitHere/deckdater/upd8_cards/cards_all_2022-07-20.json")
+toc()
+tic("table")
+namesblob <- as.data.table(bigblob)
+rm(bigblob)
+toc()
+toc()
+```
+```{r}
+cardkeep <- cardtable[news, on = "set_id", nomatch = 0L]
+```
+```{r}
+layouts <- unique(cardkeep$layout)
+```
+```{r}
+keywords <- as.data.table(as.character(cardkeep$keywords))
+keywords[keywords == "character(0)"] <- NA 
+keywords <- na.omit(keywords)
+keywords <- separate_rows(keywords, everything(), sep = '", "')
+setDT(keywords)
+keywords[, V1 := str_replace(V1, '^c."', '')][, V1 := str_replace(V1, '".$', '')]
+keywords <- unique(keywords)
+```
+```{r}
+keywords[V1 %like% 'walk', type := 'landwalk'][V1 %like% '[C|c]ycling', type := 'cycling'][V1 %like% 'Hexproof', type := 'hexproof'][V1 %like% 'Partner', type := 'partner'][V1 %like% '[K|k]icker', type := 'kicker'][V1 %like% '[N|n]injutsu', type := 'ninjutsu'][V1 %like% 'Venture into', type := 'venture'][V1 %like% '[Day|Night]bound', type := 'woofs'][V1 %like% '[S|s]torm', type := 'storm'][V1 %like% '[A|a]genda', type := 'agenda'][V1 %like% 'strike', type := 'damaging'][V1 %like% 'Infect', type := 'toxicity'][V1 %like% 'Wither', type := 'toxicity']
+```
+```{r}
+keyword_classes <- data.table(class = unique(na.omit(keywords$type)))
+```
+```{r}
+unique(na.omit(keywords$type))
+```
+```{r}
+keyword_classes[class == 'damaging', gloss := 'Changes combat damage allocation'][class == 'woofs', gloss := 'Werewolf-style transformation'][class == 'toxicity', gloss := 'Harmful counters'][class == 'agenda', gloss := 'Affects one or more secret cards before game starts']
+```
+```{sql, connection=con}
+create table defKEYWORD_CLASS(
+  KeywordClassID int Identity(1,1) primary key NOT NULL,
+  KeywordClassName varchar(25) unique NOT NULL,
+  KeywordClassDesc varchar(500) NULL)
+```
+```{sql, connection=con}
+create table refKEYWORD(
+  KeywordID int Identity(1,1) primary key NOT NULL,
+  KeywordName varchar(200) unique NOT NULL,
+  KeywordClassID int FOREIGN KEY references defKEYWORD_CLASS NULL,
+  KeywordDesc varchar(500) NULL)
+```
+```{sql, connection=con}
+create OR alter proc LEX_addKeywordClassDesc
+  @ForClass int,
+  @NewGloss varchar(500) 
+  as BEGIN 
+  if @NewGloss != (select KeywordClassDesc from defKEYWORD_CLASS where KeywordClassID = @ForClass)
+    BEGIN
+    update defKEYWORD_CLASS 
+      set KeywordClassDesc = @NewGloss
+      where KeywordClassID = @ForClass 
+    END 
+  END 
+```
+```{sql, connection=con}
+create OR alter proc LEX_newKeywordClass 
+  @Class varchar(25)
+  as BEGIN 
+  insert into defKEYWORD_CLASS(KeywordClassName)
+    VALUES(@Class)
+  END
+```
+```{sql, connection=con}
+create OR alter function lookup_KeywordClassID( 
+  @Class varchar(25))
+  RETURNS int 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select KeywordClassID from defKEYWORD_CLASS where KeywordClassName = @Class)
+  return @RET 
+  END
+```
+```{sql, connection=con}
+create OR alter proc DICT_addKeywordClass
+  @KC varchar(25),
+  @KG varchar(500) NULL 
+  as BEGIN 
+  exec dbo.LEX_newKeywordClass 
+    @Class = @KC 
+  if @KG IS NOT NULL 
+    BEGIN 
+    declare @ID int 
+    set @ID = dbo.lookup_KeywordClassID(@KC)
+    exec dbo.LEX_addKeywordClassDesc
+      @ForClass = @ID,
+      @NewGloss = @KG 
+    END 
+  END 
+```
+```{sql, connection=con}
+create OR alter proc LOAD_intoKeywordClass 
+  @KeywordClassName varchar(25),
+  @KeywordClassDesc varchar(500) NULL 
+  as BEGIN 
+  if (dbo.lookup_KeywordClassID(@KeywordClassName)) IS NULL 
+    BEGIN 
+    exec dbo.DICT_addKeywordClass 
+      @KC = @KeywordClassName,
+      @KG = @KeywordClassDesc 
+    END 
+  END 
+```
+```{r}
+setnames(keyword_classes, c("class", "gloss"), c("KeywordClassName", "KeywordClassDesc"))
+dbAppendTable(con, "defKEYWORD_CLASS", keyword_classes)
+```
+```{sql, connection=con}
+create OR alter function lookup_KeywordID(@KeywordName varchar)
+  returns INT 
+  as BEGIN 
+  declare @KeywordID int 
+  set @KeywordID = (select KeywordID from refKEYWORD where KeywordName = @KeywordName)
+  return @KeywordID 
+  END 
+```
+
+```{sql, connection=con}
+create OR alter proc LOAD_intoKeyword 
+  @IsKeywordName varchar(200),
+  @IsKeywordClassName varchar(25) NULL
+  as BEGIN 
+  if not exists (select KeywordID from refKEYWORD where KeywordName = @IsKeywordName) 
+    BEGIN 
+      insert into refKEYWORD(KeywordName)
+        VALUES(@IsKeywordName)
+    END 
+  if @IsKeywordClassName IS NOT NULL 
+    BEGIN 
+    declare @ClassID int, @KeywordID int 
+    set @ClassID = dbo.lookup_KeywordClassID(@IsKeywordClassName)
+    set @KeywordID = dbo.lookup_KeywordID(@IsKeywordName)
+    if @ClassID != (select KeywordClassID from refKEYWORD where KeywordID = @KeywordID)
+    update refKEYWORD
+      set KeywordClassID = @ClassID
+      where KeywordID = @KeywordID
+    END 
+  END 
+```
+```{r}
+keywords[!is.na(type), type := paste0('"', type, '"')]
+keywords[is.na(type), type := 'NULL'][type == '""', type := 'NULL']
+```
+
+```{r}
+tic("keyword insertion?")
+for (i in seq_len(nrow(keywords))) {
+  dbExecute(con, paste0('exec dbo.LOAD_intoKeyword @IsKeywordName = "', keywords[i, 1], '", @IsKeywordClassName = ', keywords[i, 2]))
+}
+rm(i)
+toc()
+```
+```{r}
+keywordsWithClass <- keywords[type != 'NULL']
+```
+```{r}
+keywordsWithClass[, type := str_replace_all(type, '"', '')]
+```
+```{r}
+dbGetQuery(con, "select KeywordClassID from defKEYWORD_CLASS where KeywordClassName = 'damaging'")[[1]]
+```
+
+
+```{r}
+tic("keyword insertion x2?")
+for (i in seq_len(nrow(keywordsWithClass))) {
+  class <- dbGetQuery(con, paste0("select KeywordClassID from defKEYWORD_CLASS where KeywordClassName = '", keywordsWithClass[i, 2], "'"))[[1]]
+  vals <- paste0("set KeywordClassID = ", class, "where KeywordName = '", keywordsWithClass[i, 1], "'")
+  dbExecute(con, paste0("update refKEYWORD ", vals))
+}
+rm(i)
+toc()
+```
+
+```{sql, connection=con}
+select * from refKEYWORD
+```
+
+```{r}
+a <- unique(na.omit(cardkeep$power))
+b <- unique(na.omit(cardkeep$toughness))
+jeepers <- as.data.table(unique(c(a, b)))
+#for creature feature values...
+```
+```{r}
+dotypes <- as.data.table(unique(toupper(cardkeep$type_line)))
+setDT(dotypes)
+dotypes[, V1 := str_replace_all(V1, " // ", "_..._")]
+dotypes <- separate_rows(dotypes, everything(), sep = "_..._")
+dotypes <- separate(dotypes, V1, c("type", "subtype"), sep = ' — ', fill = 'right')
+```
+```{r}
+nosplittypes <- as.data.table(unique(dotypes$type))
+nosplittypes[V1 == "SCARIEST CREATURE YOU’LL EVER SEE", V1 := NA] 
+nosplittypes <- na.omit(nosplittypes)
+nosplitsubtypes <- na.omit(as.data.table(unique(dotypes$subtype)))
+nosplitsubtypes[V1 %like% ',', V1 := NA][V1 %like% 'AND/OR ', V1 := str_replace_all(V1, 'AND/OR ', '')][V1 %like% 'LADY OF PROPER ', V1 := NA][V1 == 'ELEMENTAL?', V1 := NA]
+types <- unique(separate_rows(nosplittypes, everything(), sep = " "))
+subtypes <- as.data.table(c(unlist(unique(separate_rows(nosplitsubtypes, everything(), sep = " "))), "LADY OF PROPER ETIQUETTE"))
+setDT(types)
+supertypes <- types[!nosplittypes, on = "V1"]
+supertypes[V1 == "PLANESWALKER", V1 := NA]
+supertypes <- na.omit(supertypes)
+types <- types[!supertypes, on = "V1"]
+```
+```{sql, connection=con}
+create table defTYPE (
+  TypeID int Identity(1,1) primary key NOT NULL,
+  TypeName varchar(25) unique NOT NULL)
+
+create table defSUBTYPE (
+  SubtypeID int Identity(1,1) primary key NOT NULL,
+  SubtypeName varchar(25) unique NOT NULL)
+
+create table defSUPERTYPE (
+  SupertypeID int Identity(1,1) primary key NOT NULL,
+  SupertypeName varchar(25) unique NOT NULL)
+```
+```{sql, connection=con}
+delete from defTYPE
+delete from defSUPERTYPE
+delete from defSUBTYPE
+```
+
+```{r}
+setnames(types, "TypeName")
+setnames(supertypes, "SupertypeName")
+setnames(subtypes, "SubtypeName")
+types <- na.omit(types)
+supertypes <- na.omit(supertypes)
+subtypes <- na.omit(subtypes)
+tic("adding type line content")
+tic("types")
+dbAppendTable(con, "defTYPE", types)
+toc()
+tic("subtypes")
+dbAppendTable(con, "defSUBTYPE", subtypes)
+toc()
+tic("supertypes")
+dbAppendTable(con, "defSUPERTYPE", supertypes)
+toc()
+toc()
+```
+```{sql, connection=con}
+create OR alter function lookup_TypeID(@CardType varchar)
+  returns INT 
+  as BEGIN 
+  declare @TypeID int 
+  set @TypeID = (select TypeID from defTYPE where TypeName = @CardType)
+  return @TypeID 
+  END 
+```
+```{sql, connection=con}
+create OR alter function lookup_SubtypeID(@CardSubtype varchar)
+  returns INT 
+  as BEGIN 
+  declare @SubtypeID int 
+  set @SubtypeID = (select SubtypeID from defSUBTYPE where SubtypeName = @CardSubtype)
+  return @SubtypeID 
+  END 
+```
+```{sql, connection=con}
+create OR alter function lookup_SupertypeID(@CardSupertype varchar)
+  returns INT 
+  as BEGIN 
+  declare @SupertypeID int 
+  set @SupertypeID = (select SupertypeID from defSUPERTYPE where SupertypeName = @CardSupertype)
+  return @SupertypeID 
+  END 
+```
+```{sql, connection=con}
+create OR alter function check_ExistsOnTypeLine(@Maybe varchar)
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = dbo.lookup_SubtypeID(@Maybe)
+  if @RET IS NULL 
+    BEGIN 
+      set @RET = dbo.lookup_TypeID(@Maybe)
+      if @RET IS NULL
+        BEGIN 
+        set @RET = dbo.lookup_SupertypeID(@Maybe)
+        if @RET IS NULL 
+          set @RET = 0 
+        END 
+    END 
+  return @RET 
+  END 
+```
+
+```{sql, connection=con}
+create OR alter proc LOAD_intoTypes
+  @NewType varchar(25)
+  as BEGIN 
+  if (dbo.check_ExistsOnTypeLine(@NewType) = 0)
+    BEGIN 
+      insert into defTYPE(TypeName)
+        VALUES(@NewType)
+    END 
+  END 
+```
+```{sql, connection=con}
+create OR alter proc LOAD_intoSubtypes
+  @NewSubtype varchar(25)
+  as BEGIN 
+  if (dbo.check_ExistsOnTypeLine(@NewSubtype) = 0)
+    BEGIN 
+      insert into defSUBTYPE(SubtypeName)
+        VALUES(@NewSubtype)
+    END 
+  END 
+```
+```{sql, connection=con}
+create OR alter proc LOAD_intoSupertypes
+  @NewSupertype varchar(25)
+  as BEGIN 
+  if (dbo.check_ExistsOnTypeLine(@NewSupertype) = 0)
+    BEGIN 
+      insert into defSUPERTYPE(SupertypeName)
+        VALUES(@NewSupertype)
+    END 
+  END 
+```
+```{sql, connection=con}
+create OR alter function check_SubtypeOverlap(@ID int)
+  returns INT 
+  as BEGIN 
+  declare @RET int, @name varchar
+  set @RET = 0
+  set @name = (select SubtypeName from defSUBTYPE where SubtypeID = @ID)
+  if exists (select TypeID from defTYPE where TypeName = @name) OR exists (select SupertypeID from defSUPERTYPE where SupertypeName = @name)
+    set @RET = 1
+  return @RET 
+  end 
+```
+```{sql, connection=con}
+create OR alter function check_SupertypeOverlap(@ID int)
+  returns INT 
+  as BEGIN 
+  declare @RET int, @name varchar
+  set @RET = 0
+  set @name = (select SupertypeName from defSUPERTYPE where SupertypeID = @ID)
+  if exists (select TypeID from defTYPE where TypeName = @name) OR exists (select SubtypeID from defSUBTYPE where SubtypeName = @name)
+    set @RET = 1
+  return @RET 
+  end 
+```
+```{sql, connection=con}
+create OR alter function check_TypeOverlap(@ID int)
+  returns INT 
+  as BEGIN 
+  declare @RET int, @name varchar
+  set @RET = 0
+  set @name = (select TypeName from defTYPE where TypeID = @ID)
+  if exists (select SubtypeID from defSUBTYPE where SubtypeName = @name) OR exists (select SupertypeID from defSUPERTYPE where SupertypeName = @name)
+    set @RET = 1
+  return @RET 
+  end 
+```
+```{sql, connection=con}
+alter table defSUBTYPE
+  ADD CONSTRAINT ck_uniqueSubtypes 
+    CHECK(dbo.check_SubtypeOverlap(SubtypeID) = 0)
+```
+```{sql, connection=con}
+alter table defTYPE
+  ADD CONSTRAINT ck_uniqueTypes 
+    CHECK(dbo.check_TypeOverlap(TypeID) = 0)
+```
+```{sql, connection=con}
+alter table defSUPERTYPE
+  ADD CONSTRAINT ck_uniqueSupertypes 
+    CHECK(dbo.check_SupertypeOverlap(SupertypeID) = 0)
+```
+```{sql, connection=con}
+create table defCREATURE_FEATURE (
+  CreatureFeatureID int Identity(1,1) primary key NOT NULL,
+  CreatureFeatureName varchar(25) unique NOT NULL,
+  CreatureFeatureAbbrev char(1) unique NOT NULL,
+  CreatureFeatureDesc varchar(200) NULL)
+```
+```{sql, connection=con}
+create table defCREATURE_FEATURE_VALUE (
+  CreatureFeatureValueID int Identity(1,1) primary key NOT NULL,
+  CreatureFeatureValueText varchar(10) NOT NULL,
+  CreatureFeatureValueDesc varchar(200) NULL)
+```
+```{sql, connection=con}
+insert into defCREATURE_FEATURE(CreatureFeatureName, CreatureFeatureAbbrev)
+  VALUES('Power', 'P'), ('Toughness', 'T')
+```
+```{r}
+length(unique(jeepers$CreatureFeatureValueText))
+length(jeepers$CreatureFeatureValueText)
+```
+```{sql, connection=con}
+delete from defCREATURE_FEATURE_VALUE
+```
+
+```{r}
+jeepers[CreatureFeatureValueText == '∞', CreatureFeatureValueText := 'Infinity']
+```
+
+```{r}
+tic("add existing powers/toughnesses")
+setnames(jeepers, "CreatureFeatureValueText")
+dbAppendTable(con, "defCREATURE_FEATURE_VALUE", jeepers)
+toc()
+```
+```{sql, connection=con}
+select * from defCREATURE_FEATURE_VALUE
+```
+```{sql, connection=con}
+alter table defCREATURE_FEATURE_VALUE 
+  ADD CONSTRAINT ck_PTrepeats 
+    UNIQUE(CreatureFeatureValueText)
+```
+```{sql, connection=con}
+create OR alter function lookup_CreatureFeatureValueID(@val varchar) 
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select CreatureFeatureValueID from defCREATURE_FEATURE_VALUE where CreatureFeatureValueText = @val)
+  return @RET 
+  END 
+```
+```{r}
+setkey(namesblob, oracle_id)
+setkey(cardkeep, oracle_id)
+keep <- cardkeep$oracle_id 
+corp <- namesblob[oracle_id %in% keep]
+corp <- corp[!(lang == 'en')]
+corp <- subset(corp, select = c(oracle_id, lang, printed_name))
+corp <- corp[complete.cases(corp)]
+setkey(corp, printed_name)
+cerp <- unique(corp)
+length(unique(cerp$oracle_id))
+length(unique(cerp$printed_name))
+rm(corp)
+rm(namesblob)
+```
+```{r}
+setwd("C:/Users/cyrus/GitHere/deckdater/upd8_sets")
+write.csv(cheep, paste0("canonized_sets_", Sys.Date(), ".csv"))
+```
+```{r}
+cardle <- cardkeep[!is.na(oracle_id)]
+cardle <- cardle[!(layout == "token")]
+no <- subset(cardle, select = c("object", "multiverse_ids", "mtgo_id", "mtgo_foil_id", "tcgplayer_id", "cardmarket_id", "highres_image", "image_status", "image_uris.small", "image_uris.normal", "image_uris.large", "image_uris.png", "image_uris.art_crop", "image_uris.border_crop", "reserved", "foil", "nonfoil", "finishes", "oversized", "promo", "set", "set_name", "set_type", "set_uri", "set_search_uri", "scryfall_set_uri", "prints_search_uri", "card_back_id", "edhrec_rank", "penny_rank", "prices.usd", "prices.usd_foil", "prices.usd_etched", "prices.eur_foil", "prices.tix", "related_uris.gatherer", "related_uris.tcgplayer_infinite_articles", "related_uris.tcgplayer_infinite_decks", "related_uris.edhrec", "promo_types", "arena_id", "preview.source", "preview.source_uri", "preview.previewed_at", "security_stamp", "frame_effects", "printed_name", "tcgplayer_etched_id", "printed_type_line", "printed_text", "variation_of", "flavor_name", "set_code", "i.set_name", "scryfall_api", "i.scryfall_uri", "i.set_type", "card_count", "block_code", "block_name"))
+```
+```{r}
+setkey(cardle, id)
+setkey(no, id)
+try <- merge(cardle, no, by="id", all.x=F)
+```
+```{r}
+j <- names(cardle)
+f <- names(no)
+```
+```{r}
+c <- setdiff(j, f)
+c
+carpentry <- subset(cardle, select = c)
+rm(j, f, c, cardle, no)
+```
+```{r}
+carpentry[type_line %like% 'Basic', oracle_id := NA]
+```
+```{r}
+testing <- carpentry[!is.na(oracle_id)]
+```
+```{r}
+ohno <- cardkeep[!(all_parts == 'NULL')]
+ok <- subset(ohno, select = c("id", "oracle_id", "layout", "name", "type_line", "all_parts", "card_faces"))
+ok <- ok[!is.na(oracle_id)]
+ok <- ok[!(layout == "double_faced_token")]
+
+
+```
+```{r}
+t <- names(cardkeep)
+formats <- t[grep('legalities.', t)]
+formats <- str_replace_all(formats, 'legalities.', '')
+```
+```{r}
+formatting <- data.table(FormatNameMachineReadable = formats)
+```
+
+```{sql, connection=con}
+create table defFORMAT_NAME(
+  FormatNameID int Identity(1,1) primary key NOT NULL,
+  FormatName varchar(25) NULL,
+  FormatNameMachineReadable varchar(25) unique NOT NULL,
+  FormatNameDesc varchar(500) NULL)
+```
+
+```{r}
+dbAppendTable(con, "defFORMAT_NAME", formats)
+```
+```{r}
+for (i in seq_along(formats)) {
+  dbExecute(con, paste0("insert into defFORMAT_NAME(FormatNameMachineReadable) VALUES('", formats[i], "')"))
+}
+```
+
+```{r}
+legalities <- unique(cardkeep$legalities.alchemy)
+```
+```{r}
+langs <- unique(cardkeep$lang)
+```
+```{sql, connection=con}
+create table defLANGUAGE ( --translations 
+  LanguageID int Identity(1,1) primary key NOT NULL,
+  LanguageName varchar(25),
+  LanguageAbbrev varchar(5) unique NOT NULL,
+  LanguageDesc varchar(200) NULL)
+```
+```{r}
+for (i in seq_along(langs)) {
+  dbExecute(con, paste0("insert into defLANGUAGE(LanguageAbbrev) VALUES('", langs[i], "')"))
+}
+```
+```{sql, connection=con}
+create table defCOLOR ( --there are five colors
+  ColorID int Identity(1,1) primary key NOT NULL,
+  ColorName varchar(5) unique NOT NULL, 
+  ColorCode char(1) unique NOT NULL)
+insert into defCOLOR(ColorName, ColorCode)
+  VALUES('White', 'W'), ('Blue', 'U'), ('Black', 'B'), ('Red', 'R'), ('Green', 'G')
+
+```
+```{sql, connection=con}
+create OR alter function fn_ColorNamesCheck()
+ returns INT 
+ as BEGIN 
+ declare @RET int 
+ set @RET = (select Count(*) from defCOLOR 
+  where ColorName not in ('White', 'Blue', 'Black', 'Red', 'Green'))
+ return @RET 
+ END 
+```
+```{sql, connection=con}
+create OR alter function fn_ColorSymbolsCheck()
+ returns INT 
+ as BEGIN 
+ declare @RET int 
+ set @RET = (select Count(ColorID) from defCOLOR where ColorCode not in ('W', 'U', 'B', 'R', 'G'))
+ return @RET 
+ END 
+```
+```{sql, connection=con}
+create OR alter function fn_ColorCountCheck()
+ returns INT 
+ as BEGIN 
+ declare @RET int 
+ set @RET = (select Count(*) from defCOLOR)
+ return @RET 
+ END
+```
+```{sql, connection=con}
+alter table defCOLOR 
+ ADD constraint ck_ColorNames
+  CHECK(dbo.fn_ColorNamesCheck() = 0)
+
+alter table defCOLOR
+ ADD constraint ck_ColorSymbols 
+  CHECK(dbo.fn_ColorSymbolsCheck() = 0)
+
+--need to not have any more sneak in now that they've been codified. 
+alter table defCOLOR
+ ADD constraint ck_ColorCount 
+  CHECK(dbo.fn_ColorCountCheck() = 5)
+```
+```{sql, connection=con}
+create table defPLATFORM ( --"games" array in bulk
+  PlatformID int Identity(1,1) primary key NOT NULL,
+  PlatformName varchar(10) unique NOT NULL, 
+  PlatformDesc varchar(200) NULL)
+
+insert into defPLATFORM(PlatformName)
+  VALUES('Paper'), ('Arena'), ('MGTO')
+```
+```{sql, connection=con}
+create table defFORMAT_TYPE (
+  FormatTypeID int Identity(1,1) primary key NOT NULL,
+  FormatTypeName varchar(25) unique NOT NULL,
+  FormatTypeDesc varchar(500) NULL)
+insert into defFORMAT_TYPE (FormatTypeName, FormatTypeDesc)
+  VALUES('Eternal', 'Black-border formats; any card that exists in their medium is legal until proven otherwise'), ('Rotating', 'Legality has a start and end date contingent on release'), ('Era', 'Pseudo-eternal counting forward from a specific date or set')
+```
+```{sql, connection=con}
+create table defFORMAT_MEDIUM (
+  FormatMediumID int Identity(1,1) primary key NOT NULL,
+  FormatMediumName varchar(25) unique NOT NULL,
+  FormatMediumDesc varchar(500) NULL)
+insert into defFORMAT_MEDIUM(FormatMediumName, FormatMediumDesc)
+  VALUES('Traditional', 'Follows paper and best-of-three rules'), ('Digital', 'Follows Arena rules')
+```
+```{sql, connection=con}
+create table refFORMAT(
+  FormatID int Identity(1,1) primary key NOT NULL,
+  FormatNameID int FOREIGN KEY references defFORMAT_NAME NOT NULL,
+  FormatMediumID int FOREIGN KEY references defFORMAT_MEDIUM NOT NULL,
+  FormatTypeID int FOREIGN KEY references defFORMAT_TYPE NOT NULL,
+  FormatDesc varchar(500) NULL,
+  CONSTRAINT no_redundant_formats UNIQUE(FormatNameID, FormatMediumID, FormatTypeID))
+```
+```{sql, connection=con}
+insert into defSET_STATUS(SetStatusName, SetStatusDesc) 
+  VALUES('legal', 'Set type is legal in this format by default'), ('not_legal', 'Set type is not legal in this format ever'), ('conditional', 'Legality is determined on a card-by-card basis')
+  create table refSET_TYPE_STATUS (
+  SetTypeStatusID int Identity(1,1) primary key NOT NULL,
+  SetTypeID int FOREIGN KEY references defSET_TYPE NOT NULL,
+  SetStatusID int FOREIGN KEY references defSET_STATUS NOT NULL,
+  FormatID int FOREIGN KEY references refFORMAT NOT NULL, 
+  Constraint one_status_per_format UNIQUE(SetTypeID, FormatID))
+```
+```{sql, connection=con}
+create table defCARD_STATUS_TYPE (
+  CardStatusTypeID int Identity(1,1) primary key NOT NULL,
+  CardStatusTypeName varchar(25) unique NOT NULL,
+  CardStatusTypeDesc varchar(500) NULL)
+
+insert into defCARD_STATUS_TYPE(CardStatusTypeName, CardStatusTypeDesc)
+  VALUES('legal', 'Legal in format'), ('not_legal', 'Never legal in format'), ('banned', 'No longer or not currently legal in format'), ('restricted', 'Stylish and questionablly legal in format (Vintage only)')
+```
+```{sql, connection=con}
+create OR alter function fn_HomeBrewleanSet()
+ returns INT 
+ as BEGIN 
+ declare @RET int 
+ set @RET = (select Count(*) from tblSET
+  where IsDigital not in ('Y', 'N'))
+ return @RET 
+ END 
+```
+```{sql, connection=con}
+alter table tblSET 
+ ADD constraint ck_IsDigitalBoolean
+  CHECK(dbo.fn_HomeBrewleanSet() = 0)
+```
+```{r}
+cardkeep[released_at == i.released_at, released_match := "yes"]
+cardkeep <- cardkeep[!(is.na(oracle_id))]
+cardkeep[released_match == "yes", released_at := as.character(NA)]
+```
+```{sql, connection=con}
+create OR alter function calc_intFromString(@str varchar(100))
+  returns INT 
+  as BEGIN 
+  declare @RET int, @startat int, @mid varchar(100), @endat int 
+    set @startat = PatIndex('%[0-9]%', @str)
+    set @mid = substring(@str, @startat, len(@str))
+    set @endat = PatIndex('%[^0-9]%', @mid)
+    set @RET = Cast(substring(@mid, 0, @endat) as int)
+  return @RET
+  END
+```
+```{sql, connection=con}
+select dbo.calc_intFromString('12.')
+```
+
+```{sql, connection=con}
+create OR alter function fn_CreatureFeatureCap()
+  returns int 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select Count(*) from defCREATURE_FEATURE)
+  return @RET 
+  END
+```
+```{sql, connection=con}
+
+alter table defCREATURE_FEATURE 
+ ADD CONSTRAINT ck_ExtraneousCreatureFeatures
+  CHECK(dbo.fn_CreatureFeatureCap() = 2)
+```
+```{sql, connection=con}
+create OR alter function fn_GetCreatureFeatureValue(@PK int)
+  returns int 
+  as BEGIN 
+  declare @RET int, @txt varchar
+  set @txt = (select CreatureFeatureValueText from defCREATURE_FEATURE_VALUE where CreatureFeatureValueID = @PK)
+  set @RET = dbo.calc_intFromString(@txt)
+  return @RET 
+  END 
+```
+```{sql, connection=con}
+--alter table defCREATURE_FEATURE_VALUE drop column CreatureFeatureValueNumeric 
+
+alter table defCREATURE_FEATURE_VALUE 
+  ADD CreatureFeatureValueNumeric as (dbo.fn_GetCreatureFeatureValue(CreatureFeatureValueID))
+```
+```{sql, connection=con}
+declare @txt varchar
+set @txt = (select Cast(CreatureFeatureValueText as varchar) from defCREATURE_FEATURE_VALUE where CreatureFeatureValueID = 42)
+select dbo.calc_intFromString('1')
+
+```
+```{sql, connection=con}
+select * from defSET_STATUS
+```
+```{sql, connection=con}
+create table defLAYOUT (
+  LayoutID int Identity(1,1) primary key NOT NULL,
+  LayoutName varchar(25) unique NOT NULL,
+  LayoutSep varchar(10) NULL)
+
+create table defFACE_TYPE (
+  FaceTypeID int Identity(1,1) primary key NOT NULL,
+  FaceTypeName varchar(25),
+  FaceTypeDesc varchar(500) NULL)
+
+create table refLAYOUT_FACE (
+  LayoutFaceID int Identity(1,1) primary key NOT NULL,
+  LayoutID int FOREIGN KEY references defLAYOUT NOT NULL,
+  FaceTypeID int FOREIGN KEY references defFACE_TYPE NOT NULL,
+  LayoutFaceName varchar(25) NULL,
+  LayoutFaceDesc varchar(500) NULL,
+  Constraint one_face_at_a_time UNIQUE (LayoutID, FaceTypeID))
+
+  
+/*
+create table tblCARD (
+  CardID varchar(36) primary key NOT NULL,
+  CardName varchar(200) NOT NULL,
+  CardScryfallURI varchar(500) NULL,
+  CardScryfallAPI varchar(500) NULL)
+  */
+
+create table tblCARD_FACE (
+  CardFaceID varchar(36) primary key NOT NULL,
+  CardID varchar(36) FOREIGN KEY references tblCARD NOT NULL,
+  CardFaceName varchar(100) unique NOT NULL,
+  LayoutFaceID int FOREIGN KEY references refLAYOUT_FACE NOT NULL)
+  
+create table tblARTIST (
+  ArtistID varchar(36) primary key NOT NULL,
+  ArtistName varchar(200))
+  
+create table tblILLUSTRATION(
+  IllustrationID varchar(36) primary key NOT NULL)
+  
+create table tblILLUSTRATION_ARTIST( --an illustration can be a collab
+  IllustrationID varchar(36) FOREIGN KEY references tblILLUSTRATION NOT NULL,
+  ArtistID varchar(36) FOREIGN KEY references tblARTIST NOT NULL,
+  CONSTRAINT illustrated_by_an_artist PRIMARY KEY (IllustrationID, ArtistID))
+  
+create table tblCARD_FACE_SET(
+  CardFaceSetID int Identity(1,1) primary key NOT NULL,
+  CardFaceID varchar(36) FOREIGN KEY references tblCARD_FACE NOT NULL,
+  SetID varchar(36) FOREIGN KEY references tblSET NOT NULL,
+  IllustrationID varchar(36) FOREIGN KEY references tblILLUSTRATION NULL,
+  PlatformID int FOREIGN KEY references defPLATFORM NOT NULL,
+  IsReprint char(1),
+  CONSTRAINT one_print_per_set_per_platform UNIQUE(CardFaceID, SetID, PlatformID))
+
+create table tblCARD_FACE_NAME (
+  CardFaceNameID int Identity(1,1) primary key NOT NULL,
+  CardFaceID varchar(36) FOREIGN KEY references tblCARD_FACE NOT NULL,
+  LanguageID int FOREIGN KEY references defLANGUAGE NOT NULL,
+  CardFaceNameText varchar(200) NOT NULL,
+  CONSTRAINT one_translation_per_language UNIQUE(CardFaceID, LanguageID))
+
+create table tblCARD_NOT_SET_DATE (
+  CardFaceSetID int FOREIGN KEY references tblCARD_FACE_SET NOT NULL,
+  CardDateReleased date NOT NULL,
+  CONSTRAINT one_fluke_per_card PRIMARY KEY(CardFaceSetID))
+
+create table tblCARD_NOT_SET_STATUS (
+  CardSetStatusExceptionID int Identity(1,1) primary key NOT NULL,
+  CardFaceSetID int FOREIGN KEY references tblCARD_FACE_SET NOT NULL,
+  FormatID int references refFORMAT NOT NULL,
+  CardStatusID int references defCARD_STATUS_TYPE NOT NULL,
+  BeginDate date NULL,
+  EndDate date NULL)
+
+create table tblCARD_FACE_COLOR_TRAIT (
+  CardFaceID varchar(36) FOREIGN KEY references tblCARD_FACE NOT NULL,
+  ColorID int FOREIGN KEY references defCOLOR NOT NULL,
+  IsCardColor char(1),
+  IsCardIdentity char(1),
+  CONSTRAINT card_color_uniqueness PRIMARY KEY (CardFaceID, ColorID))
+```
+
+```{sql, connection=con}
+create table defCOST_COLOR_TYPE (
+  CostColorTypeID int Identity(1,1) primary key NOT NULL,
+  CostColorTypeName varchar(25) unique NOT NULL,
+  CostColorTypeDesc varchar(200) NULL)
+
+create table defCOST_ALT_TYPE (
+  CostAltTypeID int Identity(1,1) primary key NOT NULL,
+  CostAltTypeName varchar(25) unique NOT NULL,
+  CostAltTypeDesc varchar(200) NULL)
+
+create table refCOST (
+  CostID int Identity(1,1) primary key NOT NULL,
+  CostColorTypeID int FOREIGN KEY references defCOST_COLOR_TYPE NOT NULL,
+  CostAltTypeID int FOREIGN KEY references defCOST_ALT_TYPE NOT NULL,
+  CostAbbrev varchar(10) unique NOT NULL,
+  CostDesc varchar(200) NULL)
+
+create table refCOST_COLOR (
+  CostID int FOREIGN KEY references refCOST NOT NULL,
+  ColorID int FOREIGN KEY references defCOLOR NOT NULL,
+  Constraint colors_per_cost PRIMARY KEY (CostID, ColorID))
+
+create table tblCARD_FACE_SET_COST (
+  CardFaceSetCostID int Identity(1,1) primary key NOT NULL,
+  CardFaceSetID int FOREIGN KEY references tblCARD_FACE_SET NOT NULL,
+  CostID int FOREIGN KEY references refCOST NOT NULL)
+
+create table tblCARD_FACE_TYPE (
+  CardFaceID varchar(36) FOREIGN KEY references tblCARD_FACE,
+  TypeID int FOREIGN KEY references defTYPE,
+  Constraint type_irony PRIMARY KEY(CardFaceID, TypeID))
+
+create table tblCARD_FACE_SUPERTYPE (
+  CardFaceID varchar(36) FOREIGN KEY references tblCARD_FACE,
+  SupertypeID int FOREIGN KEY references defSUPERTYPE,
+  Constraint supertype_irony PRIMARY KEY(CardFaceID, SupertypeID))
+
+create table tblCARD_FACE_SUBTYPE (
+  CardFaceID varchar(36) FOREIGN KEY references tblCARD_FACE,
+  SubtypeID int FOREIGN KEY references defSUBTYPE,
+  Constraint subtype_irony PRIMARY KEY(CardFaceID, SubtypeID))
+
+create table tblCARD_FACE_SET_CREATURE_FEATURE (
+  CardFaceSetID int FOREIGN KEY references tblCARD_FACE_SET NOT NULL,
+  CreatureFeatureID int FOREIGN KEY references defCREATURE_FEATURE NOT NULL,
+  CreatureFeatureValueID int FOREIGN KEY references defCREATURE_FEATURE_VALUE NOT NULL,
+  CONSTRAINT one_face_per_feature_per_creature PRIMARY KEY (CardFaceSetID, CreatureFeatureID))
+
+create table tblCARD_FACE_SET_KEYWORD (
+  CardFaceSetID int FOREIGN KEY references tblCARD_FACE_SET NOT NULL,
+  KeywordID int FOREIGN KEY references refKEYWORD NOT NULL,
+  CONSTRAINT keywords_once_at_most_per_card PRIMARY KEY (CardFaceSetID, KeywordID))
+
+create table tblTOKEN(
+  TokenID varchar(36) primary key NOT NULL)
+
+create table tblTOKEN_NAME (
+  TokenNameID int Identity(1,1) primary key NOT NULL,
+  TokenName varchar(200) NOT NULL)
+
+create table tblTOKEN_TOKEN_NAME(
+  TokenNameID int FOREIGN KEY references tblTOKEN_NAME,
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN,
+  CONSTRAINT tokens_have_names PRIMARY KEY (TokenNameID, TokenID))
+
+create table tblTOKEN_NAME_TRANSLATION (
+  TokenNameID int FOREIGN KEY references tblTOKEN_NAME,
+  LanguageID int FOREIGN KEY references defLANGUAGE NOT NULL,
+  TokenNameTranslation varchar(200) NOT NULL,
+  CONSTRAINT one_translation_per_language_for_tokens PRIMARY KEY(TokenNameID, LanguageID) )
+
+create table tblTOKEN_SET (
+  TokenSetID int Identity(1,1) primary key NOT NULL,
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN NOT NULL,
+  SetID varchar(36) FOREIGN KEY references tblSET NOT NULL)
+```
+```{sql, connection=con}
+create table tblTOKEN_SUPERTYPE(
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN NOT NULL,
+  SupertypeID int FOREIGN KEY references defSUPERTYPE NOT NULL,
+  CONSTRAINT token_supertype_irony PRIMARY KEY (TokenID, SupertypeID))
+```
+```{sql, connection=con}
+create table tblTOKEN_TYPE(
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN NOT NULL,
+  TypeID int FOREIGN KEY references defTYPE NOT NULL,
+  CONSTRAINT token_type_irony PRIMARY KEY (TokenID, TypeID))
+
+create table tblTOKEN_SUBTYPE(
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN NOT NULL,
+  SubtypeID int FOREIGN KEY references defSUBTYPE NOT NULL,
+  CONSTRAINT token_subtype_irony PRIMARY KEY (TokenID, SubtypeID))
+
+create table tblTOKEN_COLOR (
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN NOT NULL,
+  ColorID int FOREIGN KEY references defCOLOR NOT NULL,
+  CONSTRAINT color_is_once_at_most PRIMARY KEY (TokenID, ColorID))
+
+create table tblTOKEN_CREATURE_FEATURE (
+  TokenCreatureFeatureID int Identity(1,1) primary key NOT NULL,
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN NOT NULL,
+  CreatureFeatureID int FOREIGN KEY references defCREATURE_FEATURE NOT NULL,
+  CreatureFeatureValue int FOREIGN KEY references defCREATURE_FEATURE_VALUE NOT NULL,
+  Constraint one_per_feature_per_creature UNIQUE(TokenID, CreatureFeatureID))
+
+create table tblTOKEN_ORACLE (
+  TokenID varchar(36) FOREIGN KEY references tblTOKEN unique NOT NULL,
+  TokenOracleText varchar(5000),
+  CONSTRAINT oracle_expands_on_object PRIMARY KEY (TokenID))
+
+
+
+```
+
+
+```{sql, connection=con}
+insert into defCOST_COLOR_TYPE(CostColorTypeName, CostColorTypeDesc)
+  VALUES('Generic', 'Cost uses generic mana'), ('Colorless', 'Cost uses Waste symbol mana'), ('Monocolor', 'Cost uses one color of mana'), ('Hybrid', 'Cost uses two colors of mana')
+
+insert into defCOST_ALT_TYPE(CostAltTypeName, CostAltTypeDesc)
+  VALUES('Phyrexian', 'One mana or 2 life'), ('Color-optional', 'One colored mana or 2 generic'), ('Snow', 'Mana from a Snow source'), ('Normal', 'No alt')
+
+insert into defCARD_STATUS_TYPE(CardStatusTypeName, CardStatusTypeDesc)
+  VALUES('legal', 'Legal in format'), ('not_legal', 'Never legal in format'), ('banned', 'No longer or not currently legal in format'), ('restricted', 'Stylish and questionablly legal in format (Vintage only)')
+
+```
+```{sql, connection=con}
+create OR alter function fn_HomeBrewleanCardFaceSet()
+ returns INT 
+ as BEGIN 
+ declare @RET int 
+ set @RET = (select Count(*) from tblCARD_FACE_SET 
+  where IsReprint not in ('Y', 'N'))
+ return @RET 
+ END 
+```
+```{sql, connection=con}
+create OR alter function fn_HomeBrewleanCardColor()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select Count(*) from tblCARD_FACE_COLOR_TRAIT
+  where IsCardColor not in ('Y', 'N'))
+ return @RET 
+ END 
+```
+```{sql, connection=con}
+create OR alter function fn_HomeBrewleanCardIdentity()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select Count(*) from tblCARD_FACE_COLOR_TRAIT
+  where IsCardIdentity not in ('Y', 'N'))
+ return @RET 
+ END 
+```
+```{sql, connection=con}
+create OR alter function fn_CardsHaveAtLeastOneType()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = 0
+  if exists (select CF.CardFaceID from tblCARD_FACE CF
+    join tblCARD_FACE_TYPE CFT on CF.CardFaceID != CFT.CardFaceID)
+      set @RET = 1
+  return @RET 
+  END 
+```
+
+```{sql, connection=con}
+create OR alter function fn_CardsArentBasic()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select Count(CardFaceID) from tblCARD_FACE_SUPERTYPE CFS
+    join defSUPERTYPE S on CFS.SupertypeID = S.SupertypeID 
+    where SupertypeName = 'Basic')
+  return @RET 
+  END 
+```
+
+```{sql, connection=con}
+create OR alter function fn_CardsVsTokensCheck()
+  returns INT 
+  as BEGIN 
+  declare @TokenSupertype int, @RET int 
+    set @TokenSupertype = (select SupertypeID from defSUPERTYPE where SupertypeName = 'TOKEN')
+    set @RET = (select Count(*) from tblCARD_SUPERTYPE where SupertypeID = @TokenSupertype)
+  return @RET 
+  END 
+```
+```{sql, connection=con}
+create OR alter function fn_NoncreatureTokensDontRepeat()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select Count(*) from tblTOKEN_TOKEN_NAME N
+    join tblTOKEN T on N.TokenID = T.TokenID
+    join tblTOKEN_TYPE TT on T.TokenID = TT.TokenID
+    join defTYPE DT on TT.TypeID = DT.TypeID 
+    where DT.TypeName != 'Creature'
+    group by N.TokenNameID
+    having Count(N.TokenID) > 1)
+  return @RET 
+  END 
+```
+
+```{sql, connection=con}
+alter table tblCARD_FACE_SET 
+ ADD constraint ck_IsReprintBoolean 
+  CHECK(dbo.fn_HomeBrewleanCardFaceSet() = 0)
+  
+alter table tblTOKEN_TOKEN_NAME 
+  ADD CONSTRAINT ck_UniqueNamesForNoncreatureTokens 
+    CHECK(dbo.fn_NoncreatureTokensDontRepeat() = 0)
+```
+```{sql, connection=con}
+alter table tblCARD_FACE_SUPERTYPE 
+  ADD CONSTRAINT ck_CardsAreNotTokens
+    CHECK(dbo.fn_CardsVsTokensCheck() = 0)
+
+alter table tblCARD_FACE_SUPERTYPE 
+  ADD CONSTRAINT ck_CardsAreNotBasicThatsForLands
+    CHECK(dbo.fn_CardsArentBasic() = 0)
+
+alter table tblCARD_FACE_COLOR_TRAIT 
+  ADD CONSTRAINT ck_ColorYN 
+    CHECK(dbo.fn_HomeBrewleanCardColor() = 0)
+
+alter table tblCARD_FACE_COLOR_TRAIT 
+  ADD CONSTRAINT ck_IdentityYN 
+    CHECK(dbo.fn_HomeBrewleanCardIdentity() = 0)
+
+alter table tblCARD_FACE_TYPE 
+  ADD CONSTRAINT ck_CardsHaveTypes
+    CHECK(dbo.fn_CardsHaveAtLeastOneType() = 0)
+```
+```{sql, connection=con}
+create OR alter function lookup_LanguageID(@abbr varchar)
+  returns INT 
+  as BEGIN 
+  declare @LanguageID int 
+  set @LanguageID = (select LanguageID 
+    from defLANGUAGE 
+    where LanguageAbbrev = @abbr)
+  return @LanguageID
+  END 
+```
+```{sql, connection=con}
+create OR alter function lookup_KeywordID(@KeywordName varchar)
+  returns INT 
+  as BEGIN 
+  declare @KeywordID int 
+    set @KeywordID = (select KeywordID 
+      from refKEYWORD 
+      where KeywordName = @KeywordName)
+  return @KeywordID 
+  END 
+```
+```{sql, connection=con}
+create OR alter function lookup_KeywordClassID( 
+  @Class varchar(25))
+  RETURNS int 
+  as BEGIN 
+    declare @RET int 
+    set @RET = (select KeywordClassID 
+      from defKEYWORD_CLASS 
+      where KeywordClassName = @Class)
+  return @RET 
+  END
+```
+```{sql, connection=con}
+create OR alter function lookup_BlockIDbyCode(@Code char(3))
+  returns INT 
+  as BEGIN 
+    declare @RET int 
+    set @RET = (select BlockID 
+      from tblBLOCK  
+        where BlockCode = @Code)
+  return @RET 
+  END 
+```
+```{sql, connection=con}
+create OR alter function lookup_SetTypeIDbyName(@VarSetTypeName varchar) 
+ RETURNS int 
+ as BEGIN 
+ declare @SetTypeID int 
+ set @SetTypeID = (select SetTypeID 
+    from defSET_TYPE 
+      where SetTypeName = @VarSetTypeName)
+ RETURN @SetTypeID
+ END
+```
+```{sql, connection=con}
+create OR alter function lookup_CreatureFeatureValueID(@val varchar) 
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select CreatureFeatureValueID 
+    from defCREATURE_FEATURE_VALUE 
+      where CreatureFeatureValueText = @val)
+  return @RET 
+  END 
+```
+```{sql, connection=con}
+
+```
+
+
+
