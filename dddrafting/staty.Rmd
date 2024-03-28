@@ -1,0 +1,323 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(data.table)
+library(stringr)
+#for a thousand
+#sorta <- fread(file.choose())
+sorta[, as1k := (V2 * 10)]
+sorta[, W := str_extract(V1, 'W') ][, U := str_extract(V1, 'U') ][, B := str_extract(V1, 'B') ][, R := str_extract(V1, 'R') ][, G := str_extract(V1, 'G') ][, colors := nchar(V1)]
+
+library(tidyverse)
+
+tryit <- sorta[, as1k:G]
+
+starthere <- data.table(is = NA, W = NA, U = NA, B = NA, R = NA, G = NA)
+
+t1 <- data.table(
+  W = c(rep(tryit$W[2], tryit$as1k[2])),
+  U = c(rep(tryit$U[2], tryit$as1k[2])),
+  B = c(rep(tryit$B[2], tryit$as1k[2])),
+  R = c(rep(tryit$R[2], tryit$as1k[2])),
+  G = c(rep(tryit$G[2], tryit$as1k[2]))
+)
+
+t3 <- bind_rows(starthere, t1)
+
+doing <- starthere
+library(tictoc)
+nrow(tryit)
+tic("try looping")
+for (a in 1:(nrow(sorta))) {
+  times <- tryit$as1k[a]
+  named <- sorta$V1[a]
+  isW <- rep(tryit$W[a], times)
+  isU <- rep(tryit$U[a], times)
+  isB <- rep(tryit$B[a], times)
+  isR <- rep(tryit$R[a], times)
+  isG <- rep(tryit$G[a], times)
+  use <- data.table(
+    W = isW,
+    U = isU,
+    B = isB,
+    R = isR,
+    G = isG)
+  doing <- bind_rows(doing, use)}
+
+toc()
+
+length(uniqueN(doing))
+
+done <- doing
+```
+```{r}
+done[, W := !(is.na(W))][, U := !(is.na(U))][, B := !(is.na(B))][, R := !(is.na(R))][, G := !(is.na(G))]
+summary(done)
+done$this <- seq_len(nrow(done))
+undone <- pivot_longer(done, W:G)
+
+undone$this <- as.factor(undone$this)
+
+library(ggplot2)
+
+
+```
+
+```{r}
+starthere <- data.table(is = NA, W = NA, U = NA, B = NA, R = NA, G = NA)
+doing <- starthere
+for (a in 1:(nrow(sorta))) {
+  times <- sorta$as1k[a]
+  named <- rep(sorta$V1[a], times)
+  isW <- rep(is.na(sorta$W[a]), times)
+  isU <- rep(is.na(sorta$U[a]), times)
+  isB <- rep(is.na(sorta$B[a]), times)
+  isR <- rep(is.na(sorta$R[a]), times)
+  isG <- rep(is.na(sorta$G[a]), times)
+  use <- data.table(
+    is = named,
+    W = isW,
+    U = isU,
+    B = isB,
+    R = isR,
+    G = isG)
+  doing <- bind_rows(doing, use)}
+
+```
+```{r}
+again <- subset(sorta, select = c("V1", "as1k", "W", "U", "B", "R", "G"))
+again[, W := !(is.na(W))][, U := !(is.na(U))][, B := !(is.na(B))][, R := !(is.na(R))][, G := !(is.na(G))]
+```
+```{r}
+another <- data.table(
+  is = "Colorless",
+  as1k = 5,
+  W = F,
+  U = F,
+  B = F,
+  R = F,
+  G = F
+)
+again[is.na(is), is := "Colorless"]
+```
+```{r}
+iterate <- pivot_longer(again, W:G)
+names(iterate)
+
+iterate <- as.data.table(iterate)
+
+iterate[value == TRUE, has := name]
+
+undone$is <- as.character(undone$is)
+undone[value == TRUE, is := name]
+
+undoing <- na.omit(undone)
+unfold <- na.omit(iterate)
+```
+```{r}
+stopthere <- data.table(is = NA, has = NA)
+trying <- stopthere
+for (a in 1:(nrow(unfold))) {
+  times <- unfold$as1k[a]
+  doIs <- rep(unfold$is[a], times)
+  doHas <- rep(unfold$has[a], times)
+  use <- data.table(
+    is = doIs, 
+    has = doHas
+  )
+  trying <- bind_rows(trying, use)}
+trying <- na.omit(trying)
+summary(trying)
+```
+```{r}
+wh <- again[W == TRUE, ]
+```
+
+```{r}
+crump <- trying[ , .N, by=.(has)]
+crimp <- unfold[has == 'W', is]
+clump <- unfold[is %in% crimp,]
+blobW <- clump[is != 'W', sum(as1k), by=.(has)]
+ggplot(crump, aes(has, N, fill = has)) + geom_col()
+
+highest <- sorta[ , sum(as1k), by = .(colors)]
+guilds <- sorta[colors == 2, V1]
+
+by2s <- unfold[is %in% guilds, ]
+sum(unique(by2s$as1k))
+by2s[has == 'W', sum(as1k)]
+
+```
+```{r}
+sorta[, sum(as1k), by = .(colors)]
+unfold[nchar(is) == 2, sum(as1k), by = .(has)]
+unfold[(is %like% 'W'), sum(as1k), by = .(has)]
+unfold[!(is %like% 'W'), sum(as1k), by = .(has)]
+unfold[!(is %like% 'W') ,][(is %like% 'B'), ][(is %like% 'R'), sum(as1k), by = .(nchar(is))]
+
+unfold[nchar(is) == 4, sum(as1k), by = .(has)]
+
+
+
+unfold[nchar(is) < 4, ][!(is %like% 'W'), (sum(as1k)/762), by = .(nchar(is))]
+unfold[nchar(is) < 4, (sum(as1k)/1970), by = .(nchar(is))]
+unfold[nchar(is) < 4, ][has == 'W', ((sum(as1k))/564), by = .(nchar(is))]
+unfold[nchar(is) < 4, ][!(has == 'W') & unique(is), ((sum(as1k))/564), by = .(nchar(is))]
+
+upto3any <- sorta[colors < 4, ][, sum(as1k)/959, by = .(colors)]
+upto3white <- sorta[colors < 4, ][W == 'W', sum(as1k)/564, by = .(colors)]
+upto3nonwhite <- sorta[colors < 4, ][is.na(W), sum(as1k)/395, by = .(colors)]
+
+setorder(upto3any, colors)
+setorder(upto3white, colors)
+setorder(upto3nonwhite, colors)
+
+evaluating <- data.table(
+  colors = upto3any$colors,
+  all = upto3any$V1,
+  white = upto3white$V1,
+  nonwhite = upto3nonwhite$V1)
+
+
+
+sorta[colors == 2, sum(as1k), by = .(W)]
+sorta[(colors == 2) && (!is.na(W)), sum(as1k), by = .(R, B, G)]
+```
+```{r}
+upto3any <- sorta[colors < 4, ][, sum(as1k)/959, by = .(colors)]
+upto3white <- sorta[colors < 4, ][W == 'W', sum(as1k)/564, by = .(colors)]
+upto3U <- sorta[colors < 4, ][U == 'U', sum(as1k)/268, by = .(colors)]
+upto3R <- sorta[colors < 4, ][R == 'R', sum(as1k)/473, by = .(colors)]
+upto3G <- sorta[colors < 4, ][G == 'G', sum(as1k)/328, by = .(colors)]
+upto3B <- sorta[colors < 4, ][B == 'B', sum(as1k)/337, by = .(colors)]
+setorder(upto3B, colors)
+setorder(upto3U, colors)
+setorder(upto3R, colors)
+setorder(upto3G, colors)
+
+NWupto3U <- sorta[colors < 4, ][(U == 'U') & is.na(W), sum(as1k)/153, by = .(colors)]
+NWupto3R <- sorta[colors < 4, ][(R == 'R') & is.na(W), sum(as1k)/236, by = .(colors)]
+NWupto3G <- sorta[colors < 4, ][(G == 'G') & is.na(W), sum(as1k)/158, by = .(colors)]
+NWupto3B <- sorta[colors < 4, ][(B == 'B') & is.na(W), sum(as1k)/215, by = .(colors)]
+setorder(NWupto3B, colors)
+setorder(NWupto3U, colors)
+setorder(NWupto3R, colors)
+setorder(NWupto3G, colors)
+```
+```{r}
+NWsee <- data.table(
+  colors = upto3any$colors,
+  overall = upto3nonwhite$V1,
+  W = NA,
+  U = NWupto3U$V1,
+  B = NWupto3B$V1,
+  R = NWupto3R$V1,
+  G = NWupto3G$V1
+) 
+see <- data.table(
+  colors = upto3any$colors,
+  overall = upto3any$V1,
+  W = upto3white$V1,
+  U = upto3U$V1,
+  B = upto3B$V1,
+  R = upto3R$V1,
+  G = upto3G$V1) 
+
+seebetter <- data.table(
+  order = c(1, 3, 4, 6, 8, 10),
+  sample = c("overall", "W", "U (any)", "B (any)", "R (any)", "G (any)"),
+  monocolor = unlist(see[colors==1, overall:G]),
+  guilds = unlist(see[colors==2, overall:G]),
+  tricolor = unlist(see[colors==3, overall:G])
+)
+NWseebetter <- data.table(
+  order = c(2, NA, 5, 7, 9, 11),
+  sample = c("overall (exclude W)", NA, "U (exclude W)", "B (exclude W)", "R (exclude W)", "G (exclude W)"),
+  monocolor = unlist(NWsee[colors==1, overall:G]),
+  guilds = unlist(NWsee[colors==2, overall:G]),
+  tricolor = unlist(NWsee[colors==3, overall:G])) %>% drop_na()
+seal <- bind_rows(seebetter, NWseebetter) %>% as.data.table()
+setorder(seal, order)
+
+seal$counts <- totals
+
+seal[ , monocolor := (100*as.numeric(format(round(monocolor, 5), nsmall = 5)))]
+seal[ , guilds := (100*as.numeric(format(round(guilds, 5), nsmall = 5)))]
+seal[ , tricolor := (100*as.numeric(format(round(tricolor, 5), nsmall = 5)))]
+
+```
+
+```{r}
+mono <- unfold[nchar(is)==1, sum(as1k), by = .(has)]
+setnames(mono, 'V1', '1-color')
+duo <- unfold[nchar(is)==2, sum(as1k), by = .(has)]
+setnames(duo, 'V1', '2-color')
+trio <- unfold[nchar(is)==3, sum(as1k), by = .(has)]
+setnames(trio, 'V1', '3-color')
+quadro <- unfold[nchar(is)==4, sum(as1k), by = .(has)]
+setnames(quadro, 'V1', '4-color')
+quinto <- unfold[nchar(is)==5, sum(as1k), by = .(has)]
+setnames(quinto, 'V1', '5-color')
+
+setkey(mono, has)
+setkey(duo, has)
+setkey(trio, has)
+setkey(quadro, has)
+setkey(quinto, has)
+```
+```{r}
+letsgo <- mono[duo]
+letsgo <- letsgo[trio]
+letsgo <- letsgo[quadro]
+letsgo <- letsgo[quinto]
+letsgo[has=='W', order := 1][has=='U', order := 2][has=='B', order := 3][has=='R', order := 4][has=='G', order := 5]
+setorder(letsgo, order)
+setnames(letsgo, c("1-color", "2-color", "3-color", "4-color", "5-color"), c("one", "two", "three", "four", "WUBRG"))
+letsgo[ , seen := (one + two + three + four + WUBRG)]
+setcolorder(letsgo, c("order", "has", "one", "two", "three", "four", "WUBRG", "seen"))
+```
+```{r}
+sorta[ , sum(as1k), by = .(colors)]
+sorta[, sum(as1k)]
+totals <- c(184, 539, 236, 18, 18, 993)
+appendit <- data.table(
+  order = 6,
+  has = "totals",
+  one = 184, 
+  two = 539,
+  three = 236,
+  four = 18,
+  WUBRG = 16,
+  seen = 993
+)
+letsgo <- bind_rows(letsgo, appendit)
+```
+```{r}
+letsgee <- letsgo 
+letsgee[has != "totals", one := (100*as.numeric(format(round((one/184), 5), nsmall = 5)))]
+letsgee[has != "totals", two := (100*as.numeric(format(round((two/539), 5), nsmall = 5)))]
+letsgee[has != "totals", three := (100*as.numeric(format(round((three/236), 5), nsmall = 5)))]
+letsgee[has != "totals", four := (100*as.numeric(format(round((four/18), 5), nsmall = 5)))]
+letsgee[has != "totals", WUBRG := 100.00]
+letsgee[ , five := NULL]
+```
+```{r}
+amongs <- sorta[colors < 4, ]
+amongs <- subset(amongs, select = c("V1", "V2", "colors"))
+twos <- guilduos[ , sum(V2)]
+ones <- monosagain[ , sum(V2)]
+threes <- wedgeshards[ , sum(V2)]
+amongs[colors==1, ofCount := 100*as.numeric(format(round((V2/ones), 5), nsmall = 5))]
+amongs[colors==2, ofCount := 100*as.numeric(format(round((V2/twos), 5), nsmall = 5))]
+amongs[colors==3, ofCount := 100*as.numeric(format(round((V2/threes), 5), nsmall = 5))]
+setnames(amongs, c("V1", "V2"), c("identity", "ofAll"))
+setcolorder(amongs, c("colors", "identity", "ofAll", "ofCount"))
+setorder(amongs, colors, ofCount)
+```
+
+

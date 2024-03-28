@@ -1,0 +1,93 @@
+1 Arcane Denial
+1 Avacyn, Guardian Angel
+1 Azorius Chancery
+1 Azorius Guildgate
+1 Beast Within
+1 Birds of Paradise
+1 Blasphemous Act
+1 Blossoming Sands
+1 Blue Sun's Zenith
+1 Boros Guildgate
+1 Cancel
+1 Capsize
+1 Collective Voyage
+1 Command Tower
+1 Commander's Sphere
+1 Counterspell
+1 Darksteel Citadel
+1 Dawnbreak Reclaimer
+1 Desert of the Fervent
+1 Dueling Grounds
+1 Edric, Spymaster of Trest
+1 Elixir of Immortality
+1 Everflowing Chalice
+1 Exotic Orchard
+1 Font of Mythos
+1 Forbidden Orchard
+1 Forced Fruition
+4 Forest
+1 Fractured Identity
+1 Frontier Bivouac
+1 Glacial Fortress
+1 Gruul Turf
+1 Gwafa Hazid, Profiteer
+1 Hallowed Fountain
+1 Homeward Path
+1 Horn of Plenty
+1 Howling Mine
+1 Humble Defector
+3 Island
+1 Izzet Boilerworks
+1 Jace's Archivist
+1 Jungle Shrine
+1 Krosan Verge
+1 Kynaios and Tiro of Meletis
+1 Lightmine Field
+1 Looming Spires
+1 Ludevic, Necro-Alchemist
+1 Minds Aglow
+2 Mountain
+1 Myriad Landscape
+1 Mystic Monastery
+1 Oath of Druids
+1 Oblation
+1 Opal Palace
+1 Otherworld Atlas
+1 Pariah
+4 Plains
+1 Prismatic Geoscope
+1 Progenitor Mimic
+1 Prosperity
+1 Questing Phelddagrif
+1 Reins of Power
+1 Relic of Progenitus
+1 Reliquary Tower
+1 Render Silent
+1 Rites of Flourishing
+1 Seaside Citadel
+1 Selesnya Guildgate
+1 Selesnya Sanctuary
+1 Simic Growth Chamber
+1 Simic Signet
+1 Skullwinder
+1 Sol Ring
+1 Sundering Growth
+1 Supreme Verdict
+1 Swan Song
+1 Swans of Bryn Argoll
+1 Swords to Plowshares
+1 Sylvan Reclamation
+1 Temple Bell
+1 Tempt with Discovery
+1 Thornwood Falls
+1 Venser's Journal
+1 Veteran Explorer
+1 Void Shatter
+1 Voyaging Satyr
+1 Walking Archive
+1 Wash Out
+1 Wave of Reckoning
+1 Wheel and Deal
+1 Wrath of God
+
+

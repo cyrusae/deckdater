@@ -1,0 +1,11 @@
+declare @try varchar(max)
+set @try = 'Ancient Ziggurat|MAIN|Anointed Procession|MAIN|Arcane Signet|MAIN|Black Market|MAIN|Blood Artist|MAIN|Bloodcrazed Paladin|MAIN|Bloodline Keeper|MAIN|Bojuka Bog|MAIN|Boros Charm|MAIN|Boros Garrison|MAIN|Brightclimb Pathway|MAIN|Captivating Vampire|MAIN|Cathars'' Crusade|MAIN|Chance for Glory|MAIN|Coat of Arms|MAIN|Command Tower|MAIN|Cordial Vampire|MAIN|Cruel Celebrant|MAIN|Dark Impostor|MAIN|Darksteel Ingot|MAIN|Door of Destinies|MAIN|Drana, Liberator of Malakir|MAIN|Drana, the Last Bloodchief|MAIN|Dusk|MAIN|Dawn|MAIN|Edgar Markov|CMDR|Evolving Wilds|MAIN|Exquisite Blood|MAIN|Falkenrath Gorger|MAIN|Feed the Swarm|MAIN|Force of Despair|MAIN|Go for the Throat|MAIN|Guul Draz Assassin|MAIN|Herald''s Horn|MAIN|Indulgent Aristocrat|MAIN|Indulging Patrician|MAIN|Isolated Chapel|MAIN|Kalastria Highborn|MAIN|Kindred Charge|MAIN|Knight of the Ebon Legion|MAIN|Legion''s Landing|MAIN|Luxury Suite|MAIN|Malakir Rebirth|MAIN|Mathas, Fiend Seeker|MAIN|Merciless Eviction|MAIN|Metallic Mimic|MAIN|Mountain|MAIN|Mountain|MAIN|Mountain|MAIN|New Blood|MAIN|Nighthawk Scavenger|MAIN|Nomad Outpost|MAIN|Nullpriest of Oblivion|MAIN|Obelisk of Urd|MAIN|Olivia, Mobilized for War|MAIN|Opal Palace|MAIN|Orzhov Basilica|MAIN|Path of Ancestry|MAIN|Pawn of Ulamog|MAIN|Pillar of Origins|MAIN|Plains|MAIN|Plains|MAIN|Plains|MAIN|Rakdos Carnarium|MAIN|Rakdos Signet|MAIN|Reliquary Tower|MAIN|Return to Dust|MAIN|Savai Triome|MAIN|Shadow Alley Denizen|MAIN|Skullclamp|MAIN|Slate of Ancestry|MAIN|Smoldering Marsh|MAIN|Smothering Tithe|MAIN|Sol Ring|MAIN|Sorin, Lord of Innistrad|MAIN|Sorin, Solemn Visitor|MAIN|Spark Harvest|MAIN|Stensia Masquerade|MAIN|Stromkirk Captain|MAIN|Swamp|MAIN|Swamp|MAIN|Swamp|MAIN|Swamp|MAIN|Swamp|MAIN|Swamp|MAIN|Swords to Plowshares|MAIN|Teferi''s Protection|MAIN|Temple of the False God|MAIN|Terramorphic Expanse|MAIN|Thriving Bluff|MAIN|Thriving Heath|MAIN|Thriving Moor|MAIN|Twilight Prophet|MAIN|Unclaimed Territory|MAIN|Valakut Awakening|MAIN|Vampire Nocturnus|MAIN|Vance''s Blasting Cannons|MAIN|Vanquisher''s Banner|MAIN|Vault of Champions|MAIN|Vito, Thorn of the Dusk Rose|MAIN|Yahenni, Undying Partisan|MAIN'
+select value from STRING_SPLIT(@try, '|')
+declare @lorp int 
+set @lorp = 202 
+while @lorp > 0 
+ BEGIN 
+ 
+
+ set @lorp = @lorp - 1 
+ END 

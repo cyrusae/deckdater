@@ -1,0 +1,222 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{sql, connection=con, output.vars=edfax}
+select DC.CardFaceID, CF.CardFaceName, DT.TypeName, DS.SupertypeName, DB.SubtypeName, R.RarityName, S.SetReleaseDate, ST.SetTypeName from tblDECK_CARD DC 
+  join tblCARD_FACE_SET CFS on DC.CardFaceID = CFS.CardFaceID 
+  join tblCARD_FACE CF on CFS.CardFaceID = CF.CardFaceID
+  join tblCARD_FACE_TYPE CFT on DC.CardFaceID = CFT.CardFaceID
+  join defTYPE DT on CFT.TypeID = DT.TypeID 
+  join defRARITY R on CFS.RarityID = R.RarityID 
+  join tblSET S on CFS.SetID = S.SetID
+  join defSET_TYPE ST on S.SetTypeID = ST.SetTypeID 
+  LEFT join tblCARD_FACE_SUPERTYPE CS on CFS.CardFaceID = CS.CardFaceID 
+  LEFT join defSUPERTYPE DS on CS.SupertypeID = DS.SupertypeID 
+  LEFT join tblCARD_FACE_SUBTYPE CSB on CFS.CardFaceID = CSB.CardFaceID 
+  LEFT join defSUBTYPE DB on CSB.SubtypeID = DB.SubtypeID
+  where IsReprint = ''
+    and CardFaceSearchName not in ('Swamp', 'Mountain', 'Plains')
+  group by DC.CardFaceID, CF.CardFaceName, DT.TypeName, DS.SupertypeName, DB.SubtypeName, R.RarityName, S.SetReleaseDate, ST.SetTypeName 
+```
+
+```{sql, connection=con, output.vars=reprintfax}
+select DC.CardFaceID, Count(CFS.CardFaceSetID) as NumPrints, Max(S.SetReleaseDate) as LatestPrint, Min(S.SetReleaseDate) as FirstPrint
+  from tblDECK_CARD DC 
+  join tblDECK D on DC.DeckID = D.DeckID
+  join tblUSER U on D.UserID = U.UserID
+  join tblCARD_FACE_SET CFS on DC.CardFaceID = CFS.CardFaceID 
+  join tblSET S on CFS.SetID = S.SetID 
+  where DeckName = 'warmer than wine'
+    and UserName = 'Emperor'
+  group by DC.CardFaceID
+```
+
+```{sql, connection=con, output.vars=longdatefax}
+select DC.CardFaceID, S.SetCode, S.SetReleaseDate, Year(S.SetReleaseDate) as ReleaseYear, CFS.IsReprint 
+  from tblDECK_CARD DC 
+  join tblDECK D on DC.DeckID = D.DeckID
+  join tblUSER U on D.UserID = U.UserID
+  join tblCARD_FACE_SET CFS on DC.CardFaceID = CFS.CardFaceID 
+  join tblSET S on CFS.SetID = S.SetID 
+  where DeckName = 'warmer than wine'
+    and UserName = 'Emperor'
+  group by DC.CardFaceID, S.SetCode, S.SetReleaseDate, CFS.IsReprint 
+```
+```{r}
+longdatefax <- bind_rows(datefax2, datefax3)
+```
+
+```{sql, connection=con, output.vars=iterationfax}
+select S.SetCode, S.SetReleaseDate, Count(DC.CardFaceID) as EdPrints
+  from tblDECK_CARD DC 
+  join tblDECK D on DC.DeckID = D.DeckID
+  join tblUSER U on D.UserID = U.UserID
+  join tblCARD_FACE_SET CFS on DC.CardFaceID = CFS.CardFaceID 
+  join tblSET S on CFS.SetID = S.SetID 
+  where DeckName = 'warmer than wine'
+    and UserName = 'Emperor'
+  group by S.SetCode, S.SetReleaseDate
+```
+
+```{r}
+setDT(edfax)
+setDT(reprintfax)
+setDT(datefax)
+setkey(edfax, CardFaceID)
+setkey(reprintfax, CardFaceID)
+setkey(datefax, CardFaceID)
+```
+```{r}
+absoluteUnit <- edfax[reprintfax,]
+setkey(absoluteUnit, CardFaceID)
+absoluteUnit <- absoluteUnit[datefax, ]
+
+absoluteUnit$TypeName <- as.factor(absoluteUnit$TypeName)
+
+absoluteUnit$CardFaceID <- as.factor(absoluteUnit$CardFaceID)
+```
+```{sql, connection=con}
+select DC.CardFaceID, S.SetCode, S.SetReleaseDate
+  from tblDECK_CARD DC 
+  join tblDECK D on DC.DeckID = D.DeckID
+  join tblUSER U on D.UserID = U.UserID
+  join tblCARD_FACE_SET CFS on DC.CardFaceID = CFS.CardFaceID 
+  join tblSET S on CFS.SetID = S.SetID 
+  where DeckName = 'warmer than wine'
+    and UserName = 'Emperor'
+  group by DC.CardFaceID, S.SetCode, S.SetReleaseDate
+```
+
+```{r fig.height=4}
+setDT(iterationfax)
+
+iterationfax[, SetsWithThisCount := .N, by = EdPrints]
+
+ggplot(iterationfax, aes(y = EdPrints, x = SetsWithThisCount)) +
+  geom_point(aes(size = EdPrints, color = EdPrints, group = SetCode, alpha = 0.4), show.legend = F) +
+  theme_minimal()
+
+setDT(longdatefax)
+longdatefax[ , InSet := .N, by = SetCode]
+longdatefax[IsReprint == "Y", ReprintInSet := .N, by = SetCode]
+longdatefax[IsReprint != "Y", FirstPrintInSet := .N, by = SetCode]
+
+longdatefax[IsReprint == "Y", ReprintInYear := .N, by = ReleaseYear]
+longdatefax[IsReprint != "Y", FirstPrintInYear := .N, by = ReleaseYear]
+longdatefax[, PrintInYear := .N, by = ReleaseYear]
+
+
+ggplot(longdatefax, aes(x = ReleaseYear, y = InSet)) +
+  geom_pointdensity(aes(size = InSet))
+
+ggplot(longdatefax, aes(x = ReleaseYear, y = PrintInYear), show.legend = F) +
+  geom_smooth(aes(color = IsReprint)) +
+  geom_jitter(aes(size = ReprintInYear), width = 0.01, height = 0.01, alpha = 0.01, color = "black", show.legend = F) +
+#  geom_jitter(aes(size = ReprintInYear), color = "blue", alpha = 0.5) +
+  geom_jitter(aes(group = SortaPrintInYear, color = IsReprint), show.legend = F, alpha = 0.5, width = 0.3, height = 1.0) +
+  #geom_jitter(aes(size = SortaPrintInYear, color = IsReprint), show.legend = F, alpha = 0.5)
+  #geom_point(aes(x = FirstPrintInSet, y = ReprintInSet, size = InSet), show.legend = F) +
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        ) +
+  theme_minimal() +
+  scale_color_canva(palette = "Neon and bold")
+#+
+  #geom_pointdensity(aes(x = SetsWithThisCount, y = EdPrints), show.legend = F)
+  #geom_count()
+  #geom_histogram(show.legend = F)
+  #geom_jitter(aes(size = EdPrints, fill = SetCode), show.legend = F)
+```
+```{r}
+
+compresseddatefax <- longdatefax[, SetCode:FirstPrintInSet]
+compresseddatefax %<>% pivot_longer(InSet:FirstPrintInSet, names_to = "PrintType", values_to = "PrintCount")
+setDT(compresseddatefax)
+
+compresseddatefax %<>% na.omit()
+
+compresseddatefax$PrintType <- as.factor(compresseddatefax$PrintType)
+
+ggplot(compressederdatefax, aes(ReleaseYear, PrintType)) +
+  geom_violin(aes(fill = PrintType),linetype = 0,  show.legend = F, trim = F, adjust = .1) +
+  theme(panel.grid.major.x = element_blank()) +
+  xlim(1992.5,2022.5) +
+  theme_minimal() +
+  scale_fill_canva(palette = "Clean and collegiate")
+
+compressederdatefax <- compresseddatefax 
+compressederdatefax <- subset(compressederdatefax, select = c("SetCode",  "ReleaseYear", "PrintType", "PrintCount"))
+compressederdatefax %<>% unique()
+look <- compressederdatefax[ , sum(PrintCount), by = .(ReleaseYear, PrintType)]
+
+look$PrintType <- factor(look$PrintType, levels = c("InSet", "ReprintInSet", "FirstPrintInSet"))
+
+reps <- look[PrintType == "ReprintInSet", ]
+fulls <- look[PrintType == "InSet", ]
+comp <- data.table(
+  Year = reps$ReleaseYear,
+  SeeAll = fulls$V1,
+  SeeReps = reps$V1
+)
+
+comp[ , diff := SeeAll - SeeReps]
+zeroyears <- comp[diff == 0, ]$Year
+
+look[ReleaseYear %in% zeroyears, ]
+fixi <- data.table(
+  ReleaseYear = c(2022, 1996),
+  PrintType = c("FirstPrintInSet", "FirstPrintInSet"),
+  V1 = c(0, 0)
+)
+
+looksee <- bind_rows(look, fixi)
+looksee$PrintType <- factor(looksee$PrintType, levels = c("InSet", "ReprintInSet", "FirstPrintInSet"))
+
+ggplot(looksee[PrintType != "InSet",], aes(ReleaseYear, V1)) +
+  geom_area(aes(fill = PrintType), position = "stack") +
+  theme(legend.title = element_blank()) +
+  scale_fill_canva(palette = "Tropical tones", name = element_blank(), labels = c("Reprints", "New cards")) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank() #remove y axis labels
+        ) 
+```
+
+```{r}
+ggplot(absoluteUnit) + 
+  geom_point(aes(x = CardFaceID, y = i.SetReleaseDate))
+```
+```{r}
+edsuper <- edfax$SupertypeName %>% as.data.table()
+setnames(edsuper, "SupertypeName")
+edsuper[is.na(SupertypeName), SupertypeName := "None"]
+ggplot(edsuper, aes(x = SupertypeName)) +
+  geom_bar(aes(fill = SupertypeName), show.legend = F) + 
+  scale_fill_canva(name = element_blank(),
+                   labels = c("Basic", "Legendary", "None"),
+                   palette = "Neon and bold")
+
+ggplot(edfax, aes(x = TypeName)) +
+  geom_bar(aes(fill = TypeName), show.legend = F) 
+
+ggplot(edfax[!is.na(SubtypeName), ], aes(x = SubtypeName)) + 
+  geom_bar(aes(fill = SubtypeName), show.legend = F) +
+  coord_flip() 
+```
+
+```{r}
+dated_ed <- fread("C:/Users/cyrus/GitHere/deckdater/dddrafting/dating edgar.csv")
+dated_ed[ , SetCode := str_to_upper(SetCode)]
+
+releasedate_formatter <- formatter("span",
+                                   style = x ~ style(
+                                     font.weight = "bold",
+                                     color = ifelse(x = "Released", "#af8dc3", "#7fbf7b")))
+formattable(dated_ed,
+            `SetReleaseStatus` = color_bar(releasedate_formatter))
+```
+

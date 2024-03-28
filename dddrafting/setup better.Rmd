@@ -1,0 +1,76 @@
+---
+title: "deckdater cronchy"
+output: html_notebook
+---
+
+Run to redo from scratch.
+```{r}
+library(odbc)
+library(DBI)
+library(data.table)
+library(jsonlite)
+library(tidyverse)
+library(stringr)
+library(tictoc) #benchmarking
+con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "ODBC Driver 17 for SQL Server",
+                      Server = "localhost\\DAWNFIRE",
+                      Database = "deckdater",
+                      Trusted_Connection = "Yes")
+```
+
+
+```{r}
+#allowances for my booleans 
+yesseR <- function(vec) {
+  vt <- as.data.table(toupper(as.character(vec)))
+  vt[vt == "TRUE"] <- "Y"
+  vt[vt == "FALSE"] <- "N"
+  vt
+}
+```
+
+
+# figure it out alexander 
+```{r}
+#I know that cheep worked eventually but I need to backtrack and figure out which part of this needs to be canonizied.
+pls <- news$block_code 
+t <- function(x) {
+  y <- fifelse(is.na(x), as.character(NA), paste0('"', x, '"'))
+  
+}
+pls2 <- sapply(pls, t)
+z <- function(x) {
+  q <- sapply(x, t)
+  q
+}
+choop <- news 
+cheep <- as.data.table(z(choop))
+
+
+#this one is kind of cursed but I haven't been able to determine if it works without it...
+quotate <- function(dt) {
+  hold <- function(y) {
+    if (!is.na(y)) {
+      z <- paste0('"', as.character(y), '"')
+      z
+    } else {
+      z <- ""
+    }
+  }
+  enclose <- function(x) {
+    a <- lapply(x, hold)
+    a
+  }
+  for (i in seq_len(ncol(dt))) {
+    v <- dt[i, ]
+    q <- lapply(v, enclose)
+    dt[i, ] <- q
+  }
+}
+```
+
+
+
+
+

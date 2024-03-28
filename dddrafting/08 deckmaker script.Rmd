@@ -1,0 +1,57 @@
+---
+title: "new data addn"
+author: Cyrus Eosphoros
+output: html_notebook
+---
+
+## Real example decks 
+```{r deck import function}
+deckcompileR <- function(dt, cmdr = NULL) {
+  setnames(dt, "CardInput")
+  dt[CardInput == "", CardInput := as.character(NA)]
+  dt[, Quantity := as.integer(str_extract(CardInput, "[0-9]"))]
+  dt[ , CardName := str_remove(CardInput, "[0-9] ")]
+  dt %<>% separate_rows(CardName, sep = " / ")
+  setDT(dt)
+  dt[ , CardFaceSearchName := str_remove_all(str_trim(CardName, side = "both"), "[[:punct:]]")]
+  if (is.null(cmdr) == FALSE) {
+    dt[CardName %like% paste0(cmdr), CardName := NA]
+    dt %<>% na.omit()
+  }
+  dt[rep(seq_len(nrow(dt)), dt$Quantity), 1:ncol(dt)]
+  listed <- capture.output(cat(dt$CardFaceSearchName, sep = "|"))
+  listed
+  }
+```
+
+```{r example decks}
+setwd("C:/Users/cyrus/GitHere/deckdater/dddrafting/sample_decks")
+edgardeck <- readLines(paste0(getwd(), "/warmer-than-wine-edgar-tokens.txt")) 
+edgardeck <- as.data.table(edgardeck)
+gaydeck <- readLines(paste0(getwd(), "/the-gay-agenda-is-hugs.txt"))
+gaydeck <- as.data.table(gaydeck)
+```
+```{r}
+#cheating a bit by only making this support EDH but, well
+commandeR <- function(username, deckname, cmdr, decklist) {
+  querystring <- paste0("exec dbo.u_ADD_NewDeck @ForUserName = '", username, "', @FormatMachineName = 'commander', @DeckNameString = '", deckname, "', @WithSIDE = NULL, @WithWISH = NULL, @WithMAYB = NULL, @WithCMDR = '", cmdr, "', @WithMAIN = '", decklist, "', @IsPrivate = NULL")
+  querystring
+}
+```
+
+```{r}
+edgar_cmdr <- "Edgar Markov"
+edgar_list <- deckcompileR(edgardeck, cmdr = edgar_cmdr)
+edgar_import_query <- commandeR(username = 'Emperor', deckname = 'warmer than wine', cmdr = edgar_cmdr, decklist = edgar_list)
+```
+```{r}
+dbExecute(con, paste0(edgar_import_query))
+```
+```{r}
+gay_cmdr <- "Kynaios and Tiro of Meletis"
+gay_list <- deckcompileR(gaydeck, cmdr = gay_cmdr)
+gay_import_query <- commandeR(username = 'Emperor', deckname = 'the gay agenda is hugs', cmdr = gay_cmdr, decklist = gay_list)
+```
+```{r}
+dbExecute(con, paste0(gay_import_query))
+```

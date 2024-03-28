@@ -1,0 +1,115 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+# EXPERIMENTAL 
+```{sql, connection=con}
+create OR alter function fn_CardsHaveAtLeastOneType()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = 0
+  if exists (select CF.CardFaceID from tblCARD_FACE CF
+    join tblCARD_FACE_TYPE CFT on CF.CardFaceID != CFT.CardFaceID) --need to make sure this anti-join method actually works 
+      set @RET = 1
+  return @RET 
+  END 
+```
+```{sql, connection=con}
+create OR alter function fn_CardsArentBasic()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select Count(CardFaceID) from tblCARD_FACE_SUPERTYPE CFS
+    join defSUPERTYPE S on CFS.SupertypeID = S.SupertypeID 
+    where SupertypeName = 'Basic')
+  return @RET 
+  END 
+```
+```{sql, connection=con}
+create OR alter function fn_CardsVsTokensCheck()
+  returns INT 
+  as BEGIN 
+  declare @TokenSupertype int, @RET int 
+  set @TokenSupertype = (select SupertypeID from defSUPERTYPE where SupertypeName = 'TOKEN')
+  set @RET = (select Count(*) from tblCARD_SUPERTYPE where SupertypeID = @TokenSupertype)
+  return @RET 
+  END 
+```
+```{sql, connection=con}
+create OR alter function fn_NoncreatureTokensDontRepeat()
+  returns INT 
+  as BEGIN 
+  declare @RET int 
+  set @RET = (select Count(*) from tblTOKEN_TOKEN_NAME N
+    join tblTOKEN T on N.TokenID = T.TokenID
+    join tblTOKEN_TYPE TT on T.TokenID = TT.TokenID
+    join defTYPE DT on TT.TypeID = DT.TypeID 
+    where DT.TypeName != 'Creature'
+    group by N.TokenNameID
+    having Count(N.TokenID) > 1)
+  return @RET 
+  END 
+```
+
+if works, 
+```{sql, connection=con}
+alter table tblCARD_FACE_TYPE 
+  ADD CONSTRAINT ck_CardsHaveTypes
+    CHECK(dbo.fn_CardsHaveAtLeastOneType() = 0)
+
+alter table tblCARD_FACE_SUPERTYPE 
+  ADD CONSTRAINT ck_CardsAreNotBasicThatsForLands
+    CHECK(dbo.fn_CardsArentBasic() = 0)
+
+alter table tblCARD_SUPERTYPE 
+  ADD CONSTRAINT ck_CardsAreNotTokens
+    CHECK(dbo.fn_CardsVsTokensCheck() = 0)
+
+alter table tblTOKEN_TOKEN_NAME 
+  ADD CONSTRAINT ck_UniqueNamesForNoncreatureTokens 
+    CHECK(dbo.fn_NoncreatureTokensDontRepeat() = 0)
+``` 
+
+## known to compile-and-not-work on copy paste:
+```{sql, connection=con}
+create OR alter function calc_intFromString(@str varchar(100))
+  returns INT 
+  as BEGIN 
+  declare @RET int, @startat int, @mid varchar(100), @endat int 
+    set @startat = PatIndex('%[0-9]%', @str)
+    set @mid = substring(@str, @startat, len(@str))
+    set @endat = PatIndex('%[^0-9]%', @mid)
+    set @RET = Cast(substring(@mid, 0, @endat) as int)
+  return @RET
+  END
+GO
+
+create OR alter function fn_GetCreatureFeatureValue(@PK int)
+  returns int 
+  as BEGIN 
+  declare @RET int, @txt varchar
+  set @txt = (select CreatureFeatureValueText from defCREATURE_FEATURE_VALUE where CreatureFeatureValueID = @PK)
+  set @RET = dbo.calc_intFromString(@txt)
+  return @RET 
+  END 
+GO 
+
+--works on manual tests, doesn't work in a computed column. what gives
+
+--consequently, unsure if this can be trusted: 
+alter table refCOST
+  ADD CostCMC AS (case 
+  WHEN CostAbbrev = '{X}'
+    then 0 
+  WHEN CostAltTypeID = (select CostAltTypeID from defCOST_ALT_TYPE where CostAltTypeName = 'Color-optional')
+    then 2 
+  WHEN CostColorTypeID = (select CostColorTypeID from defCOST_COLOR_TYPE where CostColorTypeName = 'Generic')
+    then dbo.calc_intFromString(CostAbbrev)
+  ELSE 1
+  END)
+GO 
+```
+

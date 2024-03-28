@@ -1,0 +1,168 @@
+---
+title: "430 overview"
+author: Cyrus Eosphoros
+output: html_notebook 
+---
+
+## Setup
+```{r}
+#wrangling:
+library(data.table)
+library(tidyverse)
+library(stringr)
+library(magrittr)
+
+library(odbc) #DB connection
+library(DBI) #DB connection
+
+#dataviz
+library(ggplot2) 
+library(ggpointdensity)
+library(ggalluvial)
+library(gganimate)
+
+con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "ODBC Driver 17 for SQL Server",
+                      Server = "localhost\\DAWNFIRE",
+                      Database = "Info_430_deckdater",
+                      Trusted_Connection = "Yes")
+```
+```{r as needed}
+dbDisconnect(con)
+```
+
+
+## Notes on pre-processing (including data wrangling for future updates)
+
+Things you're not seeing here: 
+
+- Download Sets data (there's an endpoint for that)
+- Download table of URLs pointing to bulk data (can't connect directly)
+- Get bulk file for "default-cards" (English)
+- Get bulk file for "all-cards" (translations)
+
+Above is saved as JSON files, read back in from the file with jsonlite, converted to data.tables. This is honest-to-goodness the most costly/glitchiest part of the entire pipeline and I'm still troubleshooting why on Earth the same file works the day it's downloaded but not when read in later; JSON is not a very friendly format when trying to get to flat files.
+
+- Populate blocks out of sets 
+- Drop "sets" with codes > 3 characters (those aren't canonical)
+- Drop irrelevant columns from Sets data; rename remainder to match DB table 
+- Check database for existing set types in defSET_TYPE 
+- Check unique entries in SetTypeName on Sets for new kinds of set type
+- Pass new set types to DB if needed 
+- Pull tblSET recompiled-to-matching-import-table view from database and compare to on-memory sets table 
+- Send rows that don't match in sets table to SCRY_CANON_SETS 
+
+- Filter out rows in Cards (default) table that don't match the SetID of a canonical Set 
+- Drop columns not being used (currently includes card_faces array because that's going to be the most complicated part after "reliable JSON files actually acquired from source of truth on schedule")
+- Split names of double-faced cards on `/` character to create faces; assign "default" (front) and "naming" (not front) faces 
+- Strip punctuation from card names to create search names 
+- Split type line into Supertype+Type (before the dash as printed) and Subtypes
+- Pull unique entries in Subtypes split by ' ' that aren't from `funny` sets to add new subtypes
+- Check list of subtypes against contents of defSUBTYPE, add as needed 
+- Filter unique Cards by everything other than API/URI (multiple printings in the same set for special editions in paper have different URLs)
+- Split into rows by PlatformName (learned this one the hard way, see above)
+- Check recompiled-to-match view for tblCARD against cards (on update)
+- Add new cards 
+
+#### Translations, tbd:
+
+- Pare down the absolutely massive all cards file to just CardID + English name + translated name + language in question
+- Strip punctuation from English name to create searchable name 
+- Split translated names by face
+- Import matching those for the translation table
+
+# Code
+
+```{r}
+setsfile <- fread("C:/Users/cyrus/GitHere/deckdater/starting_sets.csv")
+setkey(setsfile, SetID)
+cardsfile <- fread("C:/Users/cyrus/GitHere/deckdater/longest_cards.csv")
+setkey(cardsfile, CardID)
+```
+```{r}
+blockslist <- setsfile[!is.na(BlockCode), .(BlockCode, BlockName)] 
+blockslist <- unique(blockslist)
+dbWriteTable(con, "tblBLOCK", blockslist, append = T)
+```
+```{r}
+settypes <- unique(setsfile$SetTypeName) %>% na.omit() %>% as.data.table() 
+setnames(settypes, "SetTypeName")
+dbWriteTable(con, "defSET_TYPE", settypes, append = T)
+```
+```{r}
+layouts <- unique(cardsfile$LayoutName) %>% na.omit() %>% as.data.table() %>% setnames("LayoutName")
+dbWriteTable(con, "defLAYOUT", layouts, append = T)
+```
+
+```{sql, connection=con}
+insert into refLAYOUT_FACE (LayoutID, FaceID)
+  select LayoutID, FaceID from defLAYOUT 
+    LEFT join defFACE on 1=1
+```
+
+### Subtypes 
+
+...were generated as above but are being added manually for now, for reasons this margin is too narrow to etc.
+```{r}
+subtypes <- c("Kor", "Cleric", "Horror", "Adventure", "Human", "Rogue", "Werewolf", "Vehicle", "Wizard", "Jace", "Peasant", "Spirit", "Construct", "Faerie", "Berserker", "Saga", "Fox", "Monk", "Eldrazi", "Reflection", "Vampire", "Elephant", "Giant", "Aura", "Curse", "Leech", "Dragon", "Moonfolk", "Goblin", "Shaman", "Serpent", "Frog", "Demon", "Scarecrow", "Equipment", "Soldier", "Warlock", "Merfolk", "Noble", "Elf", "Druid", "Plant", "Insect", "Kraken", "Knight", "God", "Snake", "Avatar", "Rowan", "Will", "Naga", 
+"Warrior", "Pegasus", "Bird", "Fish", "Homunculus", "Elemental", "Angel", "Egg", "Archer", "Ranger", "Wall", "Eye", "Djinn", "Efreet", "Advisor", "Beast", "Lukka", "Zombie", "Golem", "Specter", "Ogre", "Scorpion", "Scout", "Rat", "Badger", "Arlinn", "Samurai", "Gideon", "Shapeshifter", "Orc", "Nissa", "Unicorn", "Spider", "Hippogriff", "Assassin", "Elder", "Bolas", "Treefolk", "Mutant", "Chandra", "Tibalt", "Bat", "Pest", "Cat", "Fungus", "Liliana", "Dwarf", "Troll", "Minotaur", "Garruk", "Hag", "Nightmare", "Lizard", "Gargoyle", "Sliver", "Siren", "Pirate", "Horse", "Hydra", "Gate", "Dakkon", "Phyrexian", "Gremlin", "Nightstalker", "Beeble", "Hellion", "Ally", "Kirin", "Thopter", "Artificer", "Rhino", "Imp", "Wurm", "Vedalken", "Ninja", "Drake", "Sphinx", "Spellshaper", "Nomad", "Dinosaur", "Ajani", "Ox", "Viashino", "Urza’s", "Power-Plant", "Shade", "Dog", "Arcane", "Mountain", "Forest", "Camel", "Teferi", "Dryad", "Incarnation", "Chimera", "Wraith", "Licid", "Zubera", "Gorgon", "Crocodile", "Minion", "Griffin", "Skeleton", "Gnome", "Elk", "Dauthi", "Praetor", "Kithkin", "Boar", "Basilisk", "Leviathan", "Jackal", "Pilot", "Ooze", "Island", "Plains", "Illusion", "Mercenary", "Devil", "Mystic", "Yanling", "Nephilim", "Ape", "Slith", "Monkey", "Swamp", "Nahiri", "Yeti", "Wolf", "Ouphe", "Tiefling", "Centaur", "Raccoon", "Ellywick", "Crab", "Nymph", "Trap", "Juggernaut", "Drone", "Archon", "Barbarian", "Hippo", "Squid", "Metathran", "Desert", "Shark", "Lesson", "Jellyfish", "Salamander", "Minsc", "Atog", "Cyclops", "Myr", "Whale", "Orgg", "Cephalid", "Kobold", "Elminster", "Tower", "Bear", "Antelope", "Class", "Satyr", "Rebel", "Spike", "Karn", "Daretti", "Halfling", "Otter", "Azra", "Ashiok", "Phoenix", "Mine", "Squirrel", "Citizen", "Turtle", "Aetherborn", "Samut", "Hyena", "Shrine", "Bard", "Goat", "Thrull", "Kiora", "Tamiyo", "Carrier", "Lhurgoyf", "Rune", "Background", "Monger", "Pangolin", "Clue", "Tezzeret", "Dack", "Demigod", "Saheeli", "Harpy", "Yanggu", "Sorin", "Cockatrice", "Calix", "Gnoll", "Angrath", "Jaya", "Kavu", "Processor", "Trilobite", "Thalakos", "Octopus", "Nixilis", "Lair", "Mongoose", "Tyvar", "Kaya", "Rabbit", "Wrenn", "Bringer", "Aminatou", "Kasmina", "Surrakar", "Sarkhan", "Homarid", "Vraska", "Soltari", "Elspeth", "Gith", "Weird", "Domri", "Ugin", "Assembly-Worker", "Davriel", "Masticore", "Cartouche", "Wombat", "Ferret", "Beholder", "Windgrace", "Lammasu", "Volver", "Dovin", "Slug", "Mole", "Basri", "Mouse", "Coward", "Flagbearer", "Kaito", "Aurochs", "Oyster", "Jeska", "Locus", "Treasure", "Szat", "Mordenkainen", "Astartes", "Estrid", "Worm", "Oko", "Starfish", "Vivien", "Huatli", "Xenagos", "Phelddagrif", "Manticore", "Dihada", "Venser", "Wolverine", "Lamia", "Lolth", "Sheep", "Rigger", "Narset", "Noggle", "Food", "Teyo", "Ral", "Grist", "Zariel", "Brushwagg", "Niko", "Freyalise", "Sponge", "Dreadnought", "Fortification", "Nautilus", "Serra", "Bahamut", "Spawn", "Fractal", "Sable", "Tasha", "Koth", "Walrus")
+subtypelist <- data.table(
+  SubtypeName = subtypes
+)
+dbWriteTable(con, "defSUBTYPE", subtypelist, append = T)
+```
+
+## Bulk imports 
+### Username gen material 
+```{r}
+library(stopwords)
+stopslist <- stopwords() 
+stopslist <- as.data.table(stopslist)
+setnames(stopslist, "StopWord")
+stopslist[ , StopWord := str_to_title(StopWord)]
+stopslist[ , StopWord := str_remove_all(StopWord, "[[:punct:]]")]
+stopslist <- unique(stopslist)
+```
+```{r}
+dbWriteTable(con, "UN_StopWord", stopslist, append = T) 
+```
+
+```{r}
+wordles <- read_lines("C:/Users/cyrus/GitHere/deckdater/randomwords.txt", skip_empty_rows = TRUE) %>% as.data.table() %>% na.omit() %>% unique() %>% setnames("Wordle")
+wordles[ , Wordle := str_to_sentence(Wordle)]
+```
+```{r}
+dbWriteTable(con, "UN_Wordles", wordles, append = T)
+```
+
+
+### Sets 
+```{r}
+setsfile[ , BlockName := NULL]
+dbWriteTable(con, "STAGE_SETS", setsfile, append = T)
+```
+
+### Cards 
+
+```{r}
+tic()
+dbWriteTable(con, "STAGE_CARDS", cardsfile, append = T)
+toc()
+```
+
+
+## The main feature... 
+```{sql, connection=con, output.vars=gaydating}
+declare @res deckdating 
+exec dbo.o_DATE_DECK @UserName = 'Emperor', @DeckName = 'the gay agenda is hugs'
+```
+
+### Visualizations
+
+
+## Clean up
+
+```{r run last}
+dbDisconnect(con)
+```
+

@@ -1,0 +1,78 @@
+2 Blade Instructor
+2 Boros Guildgate
+1 Experimental Frenzy
+1 Fire Urchin
+1 Gird for Battle
+2 Hammer Dropper
+2 Healer's Hawk
+1 Hunted Witness
+1 Inescapable Blaze
+1 Integrity / Intervention
+1 Intrusive Packbeast
+1 Justice Strike
+1 Maximize Velocity
+7 Mountain
+7 Plains
+1 Response / Resurgence
+1 Righteous Blow
+3 Skyknight Legionnaire
+1 Skyline Scout
+1 Sunhome Stalwart
+1 Sure Strike
+1 Truefire Captain
+
+Sideboard:
+2 Barrier of Bones
+1 Bartizan Bats
+2 Boros Locket
+2 Candlelight Vigil
+1 Centaur Peacemaker
+1 Chemister's Insight
+1 Child of Night
+1 Citywatch Sphinx
+1 Collar the Culprit
+1 Conclave Cavalier
+1 Dimir Guildgate
+1 Expansion / Explosion
+1 Generous Stray
+2 Goblin Locksmith
+1 Golgari Guildgate
+1 Golgari Locket
+1 Golgari Raiders
+1 Gravitic Punch
+1 Hitchclaw Recluse
+2 Hypothesizzle
+1 Invert / Invent
+1 Ironshell Beetle
+1 Izzet Locket
+1 Kraul Foragers
+1 Leapfrog
+1 Ledev Champion
+1 Lotleth Giant
+1 Loxodon Restorer
+1 Mausoleum Secrets
+1 Muse Drake
+1 Nightveil Sprite
+2 Overgrown Tomb
+1 Pause for Reflection
+1 Price of Fame
+1 Rhizome Lurcher
+1 Righteous Blow
+1 Rosemane Centaur
+2 Selesnya Guildgate
+1 Severed Strands
+1 Status / Statue
+1 Sumala Woodshaper
+1 Sworn Companions
+2 Take Heart
+1 Torch Courier
+2 Urban Utopia
+1 Vedalken Mesmerist
+1 Veiled Shade
+2 Vernadi Shieldmate
+2 Vicious Rumors
+1 Wand of Vertebrae
+1 Watcher in the Mist
+1 Whisper Agent
+1 Whispering Snitch
+

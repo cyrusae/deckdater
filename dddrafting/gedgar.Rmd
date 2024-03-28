@@ -1,0 +1,286 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(data.table)
+library(tidyverse)
+library(stringr)
+library(magrittr)
+library(odbc)
+library(DBI)
+library(tictoc) #benchmarking
+con <- DBI::dbConnect(odbc::odbc(),
+                      Driver = "ODBC Driver 17 for SQL Server",
+                      Server = "localhost\\DAWNFIRE",
+                      Database = "deckdater_dev",
+                      Trusted_Connection = "Yes")
+```
+
+
+```{r}
+setwd("C:/Users/cyrus/GitHere/deckdater/dddrafting/sample_decks")
+edgar <- read_lines("warmer-than-wine-edgar-tokens.txt") 
+```
+```{r}
+dt_edgar <- as.data.table(edgar)
+dt_edgar[edgar == "", edgar := as.character(NA)]
+dt_edgar <- drop_na(dt_edgar)
+dt_edgar[, quantity := str_extract(edgar, '[0-9]')]
+dt_edgar[, name := str_remove(edgar, '[0-9] ')]
+dt_edgar <- separate_rows(dt_edgar, c('name'), sep = ' / ')
+setDT(dt_edgar)
+dt_edgar[, name := str_trim(name, side = "both")]
+dt_edgar[, quantity := as.integer(quantity)]
+dt_edgar$edgar <- NULL
+setcolorder(dt_edgar, c("name", "quantity"))
+dt_edgar[, zone := str_extract(name, "\\*CMDR\\*")]
+ed_cmdr <- dt_edgar[!is.na(zone),]$name %>% str_remove(" \\*CMDR\\*")
+edgar_listed <- dt_edgar[is.na(zone),]
+edgar_listed <- edgar_listed[rep(seq_len(nrow(edgar_listed)), edgar_listed$quantity), 1:ncol(edgar_listed)]
+ed_deck <- capture.output(cat(edgar_listed$name, sep = '|')) %>%  str_remove_all("[[:punct:]]")
+ed <- c(ed_cmdr, ed_deck)
+```
+
+```{r}
+gays <- read_lines("C:/Users/cyrus/GitHere/deckdater/dddrafting/sample_decks/the-gay-agenda-is-hugs.txt") %>% as.data.table()
+gays[gays == "", ] <- NA 
+gays <- drop_na(gays)
+setnames(gays, "list")
+gays[, quantity := str_extract(list, "[0-9] ")]
+gays[, name := str_remove(list, "[0-9] ")]
+gays[name %like% 'Kynaios and Tiro', zone := "CMDR"]
+gay_cmdr <- gays[!is.na(zone),]$name
+gay_listed <- gays[is.na(zone), ][rep(seq_len(nrow(gays)), gays$quantity), 1:ncol(gays)]
+gay_deck <- na.omit(gay_listed$name)
+gay_deck <- capture.output(cat(gay_deck, sep = "|")) %>% str_remove_all("[[:punct:]]")
+gay <- c(gay_cmdr, gay_deck)
+```
+
+
+```{r}
+gays[, testcase := str_remove_all(name, "[[:punct:]]")]
+```
+
+
+```{r}
+stringifieR <- function(vec, sep = ",") {
+  str <- paste0(vec, sep = ",")
+  str
+}
+test <- unspooleR(dt_edgar)
+test2 <- lapply(dt_edgar, stringifieR)
+
+stringier <- ""
+ednames <- dt_edgar$name 
+edquant <- dt_edgar$quantity
+edzones <- dt_edgar$zone
+for (i in 1:nrow(dt_edgar)) {
+  card <- paste0(dt_edgar[i], sep=',')
+  stringier <- cat(stringier, card, append = TRUE)
+  stringier 
+}
+dt_edgar[, strung := paste0(name, sep=';;', quantity, sep=';;', zone)]
+stringier <- paste0(dt_edgar$strung, sep=';;')
+here <- paste0(stringier, sep='')
+#looks like 'Ancient Ziggurat;;1;;MAIN;;Anointed Procession;;1;;MAIN;;Arcane...'
+```
+```{r}
+x <- unlist(dt_edgar$strung)
+y <- c(x)
+y <- capture.output(cat(x, sep="|"))
+a <- str_replace_all(y, "'", "''")
+a <- str_replace_all(a, ";;", ";")
+library(stringi)
+z <- stri_escape_unicode(y)
+```
+
+```{r}
+for (i in 1:nrow(dt_edgar)) {
+  card <- dt_edgar[i, name]
+  zone <- dt_edgar[i, zone]
+  do <- dt_edgar[i, quantity]
+  done <- capture.output(cat(rep(paste(c(card, zone)), do), sep="|"))
+  dt_edgar[i, strongker := done]
+}
+a <- dt_edgar$strongker 
+b <- capture.output(cat(a, sep = '|'))
+b <- str_replace_all(b, "'", "''")
+```
+
+```{r}
+ed_deck <- str_remove_all(ed_deck, "'")
+```
+
+```{sql, connection=con, output.vars=edgardeck}
+with Edgar (Quantity, CardFaceSearchName, CardID)
+as (
+select DC.Quantity, CF.CardFaceSearchName, CF.CardID from tblDECK_CARD DC 
+ join tblCARD_FACE CF on DC.CardFaceID = CF.CardFaceID 
+ where DeckID = 4231
+ group by DeckID, DC.Quantity, CF.CardFaceSearchName, CF.CardID),
+UseRankedCards (CardFaceID, CardFaceSearchName, CardRank) as (select CardFaceID, CardFaceSearchName, Dense_Rank() over (partition by CardFaceSearchName order by CardFaceID desc) as CardRank from tblCARD_FACE)
+select * from UseRankedCards R 
+ join Edgar E on R.CardFaceSearchName = E.CardFaceSearchName
+ where CardRank = 1 
+```
+```{sql, connection=con, output.vars=cardsinsets}
+with CardSets (CardID, CardFaceID, CardFaceSetID, CardFaceSearchName, SetID, RankList) as (
+select C.CardID, CF.CardFaceID, CFS.CardFaceSetID, CF.CardFaceSearchName, CFS.SetID, Dense_Rank() over (partition by CardFaceSearchName order by CardFaceSetID)
+  from tblCARD C 
+  join tblCARD_FACE CF on C.CardID = CF.CardID 
+  join tblCARD_FACE_SET CFS on CF.CardFaceID = CFS.CardFaceID
+)
+
+select * from CardSets where RankList = 1 
+
+```
+```{r}
+setDT(cardsinsets)
+setDT(edgardeck)
+setkey(cardsinsets, CardFaceSearchName)
+setkey(edgardeck, CardFaceSearchName)
+
+edcards <- cardsinsets[edgardeck]
+```
+```{sql, connection=con, output.vars=setslist}
+select * from tblSET 
+```
+```{r}
+setDT(setslist)
+setkey(setslist, SetID)
+```
+```{r}
+setkey(edcards, SetID)
+edcardsets <- setslist[edcards]
+edcardsets2 <- edcardsets[!edcardsets[(CardFaceSearchName %in% c('Mountain', 'Swamp', 'Plains')), ]]
+```
+```{r}
+library(ggplot2)
+
+ggplot(edcardsets2) +
+  geom_histogram(aes(SetReleaseDate, fill = SetCode), show.legend = F, binwidth = 1000) + 
+  geom_freqpoly(aes(SetReleaseDate), show.legend = F, binwidth = 1000) 
+ #geom_density() 
+  #geom_bin_2d(aes(y = SetCode, x = SetReleaseDate, fill = SetCode), show.legend = F, binwidth = c(50, 1))
+  
+#  geom_bar(aes(weight = Quantity))
+```
+```{sql, connection=con, output.vars=big2boyed}
+select S.SetReleaseDate, S.SetCode, YEAR(S.SetReleaseDate) as SetYear, CF.CardFaceID, CF.CardID /*, Count(CFS.CardFaceID) as CardsIn */ from tblDECK_CARD DC 
+ join tblCARD_FACE CF on DC.CardFaceID = CF.CardFaceID 
+ join tblCARD_FACE_SET CFS on CF.CardFaceID = CFS.CardFaceID 
+ join tblSET S on CFS.SetID = S.SetID
+ where DeckID = 4231
+  and SetCode != 'sld'
+  and (CF.CardFaceSearchName != 'Mountain'
+    and CF.CardFaceSearchName != 'Swamp'
+    and CF.CardFaceSearchName != 'Plains')
+ --group by S.SetID, S.SetReleaseDate, S.SetCode
+```
+```{r fig.width = 4, fig.height = 4}
+setDT(big2boyed)
+big2boyed[, CardsIn := .N, .(SetCode)]
+
+ggplot(big2boyed, aes(SetYear, CardsIn)) +
+  geom_hex(show.legend = F, bins = 10)
+
+ggplot(big2boyed, aes(SetReleaseDate,  CardsIn), show.legend = F) +
+ # geom_density_2d(show.legend = F) + 
+  geom_density_2d_filled(aes(alpha = 0.2), show.legend = F) +
+  geom_point(aes(color = SetCode, size = CardsIn), show.legend = F) + 
+  ylim(-2, 10) +
+  scale_x_date(date_breaks = "5 years") 
+#  geom_point(aes(y = SetCode, x = SetReleaseDate, color = factor(SetCode), size = CardsIn), alpha = 0.5, show.legend = F)
+
+```
+```{sql, connection=con, output.vars=typelinefax}
+select CF.CardID, CF.CardFaceSearchName, CF.LayoutFaceID, T.TypeName from tblCARD_FACE CF
+  join tblCARD_FACE_TYPE CFT on CF.CardFaceID = CFT.CardFaceID
+  join defTYPE T on CFT.TypeID = T.TypeID 
+  group by CF.CardID, CF.CardFaceSearchName, CF.LayoutFaceID, T.TypeName 
+```
+```{sql, connection=con, output.vars=ed_subtypes}
+select SubtypeName as OfSubtype from tblDECK_CARD DC 
+  join tblDECK D on DC.DeckID = D.DeckID 
+  join tblCARD_FACE_SUBTYPE CFT on DC.CardFaceID = CFT.CardFaceID 
+  join defSUBTYPE T on CFT.SubtypeID = T.SubtypeID
+  where UserID = 1
+  group by SubtypeName
+```
+```{sql, connection=con}
+select * from defSUBTYPE
+```
+
+```{r}
+setDT(typelinefax)
+
+setkey(cardsinsets, CardFaceSearchName)
+setkey(typelinefax, CardFaceSearchName)
+
+typesetfax <- typelinefax[cardsinsets]
+
+setkey(typesetfax, SetID)
+setkey(setslist, SetID)
+
+typesetfax <- typesetfax[setslist]
+typesetfax <- typesetfax[!(is.na(TypeName)), ]
+typesetfax <- typesetfax[!(is.na(SetCode)), ]
+
+edsets <- unique(edcardsets2$SetID)
+
+edsetfax <- typesetfax[SetID %in% edsets, ]
+
+setDT(ed_types)
+ed_types[, TestLine := 1]
+
+ggplot(ed_types, aes(fill = TypeName)) + 
+  geom_bar(aes(TypeName, weight = OfType)) +
+  geom_point(aes(TypeName, OfType, size = OfType), show.legend = F) 
+
+ggplot(ed_types, aes(TypeName, OfType)) +
+  geom_area()
+
+ggplot() +
+  geom_density(data = edsetfax, aes(SetID, group = TypeName, color = TypeName, alpha = 0.5), show.legend = F) 
+
+
+  #geom_density(aes(TypeName, alpha = 0.4), show.legend = F) +
+#  geom_jitter(aes(x = SetReleaseDate, y = SetCode, alpha = 0.3, color = TypeName), show.legend = F)
+```
+
+```{r}
+checkgotcha <- unique(gotcha, by = c("CardID", "CardFaceName", "CardFaceSearchName", "LayoutName", "FaceName", "SetID", "PlatformList", "IsReprint"))
+
+bestergotcha <- unique(gotcha, by = c("CardID", "CardFaceName", "CardFaceSearchName", "LayoutName", "FaceName", "SetID", "IsReprint"))
+fwrite(bestergotcha, "C:/Users/cyrus/GitHere/deckdater/better_cards.csv")
+
+nonreprints <- checkgotcha[IsReprint == "", ]
+checknonre <- duplicated(nonreprints, by = c( "CardID", "CardFaceSearchName", "LayoutName", "FaceName"))
+nonre <- nonreprints[checknonre , ]
+nrow(unique(nonreprints, by = c( "CardID", "CardFaceSearchName", "LayoutName", "FaceName"))) 
+
+wtf <- gotcha[CardFaceSearchName %in% nonre$CardFaceSearchName, ]
+```
+```{r}
+longotcha <- separate_rows(gotcha, PlatformList, sep = ", ")
+setDT(longotcha)
+longotcha %<>% unique(by = c("CardID", "CardFaceName", "CardFaceSearchName", "LayoutName", "FaceName", "SetID", "PlatformList", "IsReprint"))
+```
+```{r}
+setnames(longotcha, "PlatformList", "PlatformName")
+fwrite(longotcha, "C:/Users/cyrus/GitHere/deckdater/longest_cards.csv")
+```
+```{sql, connection=con, output.vars=rerawsets}
+select S.SetID, S.SetCode, S.SetName, S.SetReleaseDate, ST.SetTypeName, S.SetCollectorCount, S.SetScryfallURI, S.SetScryfallAPI, B.BlockCode, B.BlockName, S.SetIsDigital 
+  from tblSET S 
+  join defSET_TYPE ST on S.SetTypeID = ST.SetTypeID 
+  LEFT join tblBLOCK B on S.BlockID = B.BlockID
+```
+
+```{r}
+fwrite(rerawsets, "C:/Users/cyrus/GitHere/deckdater/starting_sets.csv")
+```
+

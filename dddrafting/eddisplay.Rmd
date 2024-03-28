@@ -1,0 +1,39 @@
+---
+title: "Deckdater output sample"
+output: 
+  html_document: 
+    theme: cosmo
+---
+
+## User: 'Emperor'
+
+## Deck: '__warmer than wine__' *(Commander, Edgar Markov, Vampire tribal tokens)*
+
+### Last confirmed update: __2020-11-20__ *(CMR, Commander Legends, added Vault of Champions)*
+
+## **New and upcoming sets for this deck:**
+
+```{r echo=FALSE}
+library(formattable)
+library(data.table)
+library(stringr)
+dated_ed <- fread("C:/Users/cyrus/GitHere/deckdater/dddrafting/dating edgar.csv")
+dated_ed[ , SetCode := str_to_upper(SetCode)]
+customgreen <- "#af8dc3"
+customviolet <- "#7fbf7b"
+releasedate_formatter <- formatter("span",
+                                   style = x ~ style(
+                                     font.weight = "bold",
+                                     color = x ~ icontext(ifelse(x = "Released", customgreen, customviolet))))
+formattable(dated_ed, list(SetCode = formatter("span", style = ~ style(font.weight = "bold")),
+            SetReleaseDate = formatter("span",
+                                           style = ~ style(color = "white",
+                                                           font.weight = "light",
+                                                           "border-radius" = "4px",
+                                        "padding" = "4px",
+                                        margin = "1px",
+                                        background.color = ifelse(SetReleaseStatus != "Released", customgreen, customviolet))),
+            SetReleaseStatus = formatter("span",
+                                           style = ~ style(font.weight = "medium",
+                                                           color = ifelse(SetReleaseStatus != "Released", customgreen, customviolet)))))
+```

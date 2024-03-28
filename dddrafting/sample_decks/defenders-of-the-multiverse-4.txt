@@ -1,0 +1,29 @@
+4 Assault Formation
+2 Aurification
+4 Axebane Guardian
+3 Colossus of Akros
+2 Dusk / Dawn
+2 Entangler
+1 Ethereal Haze
+4 Forest
+2 Holy Day
+2 Mentor of the Meek
+3 Order of the Stars
+4 Perimeter Captain
+7 Plains
+4 Stalwart Shield-Bearers
+4 Sunpetal Grove
+4 Temple Garden
+2 Tree of Redemption
+2 Wall of Glare
+4 Windswept Heath
+
+Sideboard:
+2 AEther Web
+2 Corrosive Gale
+2 Fell the Mighty
+3 Inviolability
+2 Solar Tide
+2 Valor Made Real
+2 Wall of Tanglecord
+

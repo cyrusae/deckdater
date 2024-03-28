@@ -1,0 +1,82 @@
+1 Ancient Den
+1 Ancient Stone Idol
+1 Arcane Signet
+1 Archaeomancer's Map
+1 Blightsteel Colossus
+1 Buried Ruin
+1 Cathodion
+1 Cleansing Nova
+1 Cloud Key
+1 Colossus of Akros
+1 Darksteel Citadel
+1 Darksteel Forge
+1 Darksteel Mutation
+1 Dispatch
+1 Esper Sentinel
+1 Ethersworn Canonist
+1 Expedition Map
+1 Eye of Vecna
+1 Fabled Passage
+1 Faith's Reward
+1 Fateful Absence
+1 Flagstones of Trokair
+1 Foundry Inspector
+1 Geier Reach Sanitarium
+1 Gold Myr
+1 Grafdigger's Cage
+1 Grasp of Fate
+1 Heliod's Intervention
+1 Ichor Wellspring
+1 Illusionist's Bracers
+1 Inventors' Fair
+1 Jhoira's Familiar
+1 Junk Diver
+1 Karn, the Great Creator
+1 Lightning Greaves
+1 Losheel, Clockwork Scholar
+1 Magewright's Stone
+1 Mind's Eye
+1 Mirrorworks
+1 Mistveil Plains
+1 Mycosynth Golem
+1 Myr Moonvessel
+1 Myr Retriever
+1 Mystic Forge
+1 Nevinyrral's Disk
+1 Open the Vaults
+1 Ornithopter
+1 Oswald Fiddlebender
+1 Palladium Myr
+1 Phyrexian Rebirth
+1 Phyrexian Triniform
+21 Plains
+1 Prototype Portal
+1 Reliquary Tower
+1 Rings of Brighthearth
+1 Scarecrone
+1 Scrap Trawler
+1 Sculpting Steel
+1 Secluded Steppe
+1 Sejiri Glacier
+1 Skullclamp
+1 Smothering Tithe
+1 Snow-Covered Plains
+1 Sol Ring
+1 Sol Talisman
+1 Solemn Simulacrum
+1 Spine of Ish Sah
+1 Staff of Nin
+1 Swiftfoot Boots
+1 Swords to Plowshares
+1 Teferi's Protection
+1 Teshar, Ancestor's Apostle
+1 Thran Temporal Gateway
+1 Trading Post
+1 Treasure Keeper
+1 Treasure Vault
+1 Ugin's Nexus
+1 Urza's Saga
+1 War Room
+1 Wurmcoil Engine
+
+

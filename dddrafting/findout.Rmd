@@ -1,0 +1,153 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(jsonlite)
+library(data.table)
+library(tictoc)
+
+#backatitagain <- fromJSON("https://api.scryfall.com/bulk-data/")
+
+#urls <- backatitagain$data
+tic("try, try again")
+options(timeout = 100000)
+tic("download attempt")
+download.file("https://c2.scryfall.com/file/scryfall-bulk/default-cards/default-cards-20220809090539.json", "C:/Users/cyrus/GitHere/deckdater/upd8_cards/troubleshot.json", mode = "wb")
+toc()
+tic("read-in attempt?")
+#oracles <- fromJSON("C:/Users/cyrus/GitHere/deckdater/upd8_cards/troubleshot.json")
+fastacles <- RcppSimdJson::fload("C:/Users/cyrus/GitHere/deckdater/upd8_cards/troubleshot.json")
+toc()
+toc()
+#oracular <- stream_in(url("https://c2.scryfall.com/file/scryfall-bulk/default-cards/default-cards-20220808210812.json"))
+
+tic("old oracles")
+oldacles <- fromJSON(file.choose())
+toc()
+```
+```{r}
+tic("old bulk data")
+oldbulk <- fromJSON(file.choose())
+toc()
+
+tic("faster bulk????")
+fastbulk <- fload(file.choose())
+toc()
+```
+
+```{r}
+bulkeep <- c("id", "oracle_id", "lang", "printed_name", "printed_type_line", "printed_text", "card_faces")
+keebulk <- subset(bulktable, select = bulkeep)
+View(keebulk)
+keebulk <- keebulk[!is.na(printed_name),]
+rm(bulk, bulktable, bulkeep)
+```
+
+```{r}
+rm(upd8sets)
+```
+```{r}
+oracletable <- as.data.table(oracles)
+classes <- sapply(oracletable, class)
+
+for (i in seq_along(classes)) {
+  if (classes[[i]] == "list" & names(oracletable)[[i]] != "card_faces") {
+    thatcol <- as.character(oracletable[[i]])
+    oracletable[[i]] <- thatcol
+  }
+}
+rm(thatcol)
+```
+
+```{r}
+oracletable[oracletable==''] <- NA 
+oracletable[oracletable=='NULL'] <- NA 
+oracletable[oracletable=='list()'] <- NA 
+oracletable[oracletable=='integer(0)'] <- NA 
+oracletable[oracletable=='character(0)'] <- NA 
+```
+```{r}
+oraclecols <- names(oracletable)
+orakeep <- c(oraclecols[2:3], oraclecols[9:14], oraclecols[23:51], oraclecols[57:78], oraclecols[103:107])
+
+keepora <- subset(oracletable, select = orakeep)
+```
+```{r}
+snews <- news[nchar(data.code) == 3, ]
+snews <- subset(snews, select = c("data.id", "data.code", "data.name", "data.uri", "data.scryfall_uri", "data.released_at", "data.set_type", "data.card_count", "data.digital", "data.block_code", "data.block"))
+
+scol <- names(snews)
+fixsnol <- str_remove_all(scol, "data.")
+setnames(snews, scol, fixsnol)
+snews$digital <- as.character(snews$digital)
+snews[digital == "FALSE", digital := NA]
+snews[digital == "TRUE", digital := "Y"]
+
+setwd("C:/Users/cyrus/GitHere/deckdater/upd8_sets")
+fwrite(snews, paste0(getwd(), "/SAVE_sets_", Sys.Date(), ".csv"))
+```
+```{r}
+setkey(keepora, id)
+setkey(keebulk, id)
+```
+```{r}
+library(stringi)
+library(tidyverse)
+library(magrittr)
+library(stringr)
+abnoracle <- keepora[nchar(set) == 3 & !(layout %in% c("art_series", "normal", "token", "double_faced_token", "emblem", "reversible_card", "saga", "class", "meld", "planar", "augment")),]
+abnoracle[name %like% '[[:alnum:]] // [[:alnum:]]', face := str_replace(name, '(.*?)//', 'default //')]
+abnoracle <- separate_rows(abnoracle, c('mana_cost', 'name', 'type_line', 'face'), sep = ' // ') 
+setDT(abnoracle)
+oranorm <- keepora[layout %in% c("normal", "saga", "class") & nchar(set) == 3, ]
+oranorm[, face := "default"]
+abnoracle[, machiname := str_remove_all(name, "[[:punct:]]")]
+oranorm[, machiname := str_remove_all(name, "[[:punct:]]")]
+abnoracle[!is.na(face) & face != 'default', face := 'naming']
+
+firstpass <- bind_rows(abnoracle, oranorm)
+firstpass <- separate(firstpass, type_line, c("type", "subtype"), sep = " — ")
+firstpass[, colors := str_remove_all(colors, 'c\\(')]
+firstpass[, colors := str_remove_all(colors, '"')]
+firstpass[, colors := str_remove_all(colors, '\\)')]
+
+firstpass[, keywords := str_remove_all(keywords, 'c\\(')]
+firstpass[, keywords := str_remove_all(keywords, '"')]
+firstpass[, keywords := str_remove_all(keywords, '\\)')]
+
+firstpass[, color_identity := str_remove_all(color_identity, 'c\\(')]
+firstpass[, color_identity := str_remove_all(color_identity, '"')]
+firstpass[, color_identity := str_remove_all(color_identity, '\\)')]
+
+firstpass[, games := str_remove_all(games, 'c\\(')]
+firstpass[, games := str_remove_all(games, '"')]
+firstpass[, games := str_remove_all(games, '\\)')]
+
+firstpass[, artist_ids := str_remove_all(artist_ids, 'c\\(')]
+firstpass[, artist_ids := str_remove_all(artist_ids, '"')]
+firstpass[, artist_ids := str_remove_all(artist_ids, '\\)')]
+
+firstpass[, artist := str_replace(artist, " &", ",")]
+firstpass[, mana_cost := str_replace_all(mana_cost, "\\}\\{", "\\},\\{")]
+```
+```{r}
+collabs <- firstpass[artist_ids %like% "c\\(",]
+```
+
+```{r}
+skeeton <- subset(firstpass, select = c("id", "oracle_id", "name", "uri", "scryfall_uri", "layout", "type", "subtype", "games", "promo", "reprint", "set_id", "set", "rarity", "face", "machiname"))
+```
+```{r}
+skeeton <- skeeton[promo == FALSE, ]
+```
+```{r}
+setwd("C:/Users/cyrus/GitHere/deckdater/upd8_cards")
+fwrite(skeeton, paste0(getwd(), "/BASICASS_cards_2.csv"))
+```
+```{r}
+keebulk$card_faces <- as.character(keebulk$card_faces)
+setwd("C:/Users/cyrus/GitHere/deckdater/upd8_cards")
+fwrite(keebulk, paste0(getwd(), "/BASICASS_translations_", Sys.Date(), ".csv"))
+```
+
