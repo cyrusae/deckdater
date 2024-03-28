@@ -1,0 +1,1 @@
+c("Legendary", "Host", "Snow", "Basic")

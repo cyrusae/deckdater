@@ -1,0 +1,1 @@
+c("Instant", "Sorcery", "Creature", "Land", "Artifact", "", "Planeswalker", "Enchantment", "Conspiracy", "World", "Tribal")

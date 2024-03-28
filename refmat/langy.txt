@@ -1,0 +1,16 @@
+fr
+pt
+ja
+ru
+de
+es
+ko
+it
+zhs
+zht
+ph
+sa
+he
+ar
+grc
+la

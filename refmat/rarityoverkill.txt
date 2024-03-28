@@ -1,0 +1,6 @@
+uncommon
+rare
+mythic
+common
+special
+bonus
